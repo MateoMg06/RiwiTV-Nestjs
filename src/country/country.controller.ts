@@ -7,8 +7,8 @@ export class CountryController {
   constructor(private readonly countryService: CountryService) {}
 
   @Post()
-  create(@Body() createCountryDto: CreateCountryDto) {
-    return this.countryService.create(createCountryDto);
+  create(@Body() country: string) {
+    return this.countryService.create(country);
   }
 
   @Get()
