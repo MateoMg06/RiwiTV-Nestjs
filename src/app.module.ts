@@ -2,7 +2,9 @@ import { Module } from '@nestjs/common';
 import { createObserveModule } from '@nestjs/observe';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
-import { PaisModule } from './pais/pais.module';
+import { PaisModule } from './country/pais.module';
+import { DepartmentService } from './country/department/department.service';
+import { CityService } from './country/city/city.service';
 
 export const { ObserveModule, ObserveInstrument } = createObserveModule();
 
@@ -18,6 +20,6 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
     PaisModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [AppService, DepartmentService, CityService],
 })
 export class AppModule {}
