@@ -1,0 +1,26 @@
+import { Injectable } from "@nestjs/common";
+import { DataSource, Repository } from "typeorm";
+import { CreateCityDto } from "../dto/create-city.dto.js";
+import { City } from "../entities/city.entity.js";
+
+@Injectable()
+export class CityDao{
+    constructor(private readonly dataSource: DataSource){}
+
+    private get repo(): Repository<City>{
+        return this.dataSource.getRepository(City)
+    }
+
+    async create(dto: CreateCityDto): Promise<City>{
+        const City= await this.repo.create({...dto, isActive: false})
+        return this.repo.save(City)
+    }
+
+    async findById(id: number): Promise<City | null>{
+        return this.repo.findOne({where: {id}})
+    }
+
+    async delete(id: number): Promise<void>{
+        await this.repo.delete({id})
+    }
+}

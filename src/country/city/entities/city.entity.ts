@@ -7,6 +7,12 @@ export class City {
     @PrimaryGeneratedColumn()
     id: number
 
+    @Column()
+    isActive: boolean
+
+    @Column()
+    name: string
+
     @ManyToOne(() => Country)
     country: Country
 

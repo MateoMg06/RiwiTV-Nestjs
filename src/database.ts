@@ -2,6 +2,8 @@ import { Module } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { Country } from "./country/entities/country.entity.js";
 import { CountryModule } from "./country/country.module.js";
+import { City } from "./country/city/entities/city.entity.js";
+import { Department } from "./country/department/entities/department.entity.js";
 
 @Module({
     imports: [
@@ -12,7 +14,7 @@ import { CountryModule } from "./country/country.module.js";
             username: process.env.POSTRES_USER,
             password: process.env.POSTGRES_PASSWORD,
             database: process.env.DB_CONTAINER_NAME,
-            entities: [Country],
+            entities: [Country, City, Department],
             synchronize: true
         }),
         CountryModule
