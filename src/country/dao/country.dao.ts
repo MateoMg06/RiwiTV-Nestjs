@@ -12,7 +12,7 @@ export class CountryDao{
     }
 
     async create(dto: CreateCountryDto): Promise<Country>{
-        const country= await this.repo.create({...dto, isActive: false})
+        const country= await this.repo.create({...dto, isActive: true})
         return this.repo.save(country)
     }
 

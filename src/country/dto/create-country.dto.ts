@@ -1,7 +1,7 @@
-import { IsString, IsNumber, IsBoolean } from "class-validator";
+import { IsString, IsBoolean, IsInt } from "class-validator";
 
 export class CreateCountryDto {
-    @IsNumber()
+    @IsInt()
     id: number
     
     @IsString()

@@ -12,7 +12,7 @@ export class DepartmentDao{
     }
 
     async create(dto: CreateDepartmentDto): Promise<Department>{
-        const department= await this.repo.create({...dto, isActive: false})
+        const department= await this.repo.create({...dto, isActive: true})
         return this.repo.save(department)
     }
 

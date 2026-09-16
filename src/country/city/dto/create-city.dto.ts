@@ -1,7 +1,7 @@
-import { IsBoolean, IsNumber, IsString } from "class-validator";
+import { IsBoolean, IsInt, IsString } from "class-validator";
 
 export class CreateCityDto {
-    @IsNumber()
+    @IsInt()
     id: number
 
     @IsString()
