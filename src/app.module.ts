@@ -5,6 +5,7 @@ import { AppService } from './app.service.js';
 import { PaisModule } from './country/pais.module';
 import { DepartmentService } from './country/department/department.service';
 import { CityService } from './country/city/city.service';
+import { UserModule } from './user/user.module';
 
 export const { ObserveModule, ObserveInstrument } = createObserveModule();
 
@@ -18,6 +19,7 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
       serviceId: 'riwi-tv-nestjs',
     }),
     PaisModule,
+    UserModule,
   ],
   controllers: [AppController],
   providers: [AppService, DepartmentService, CityService],

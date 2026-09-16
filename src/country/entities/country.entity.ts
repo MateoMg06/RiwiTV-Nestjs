@@ -1,7 +1,7 @@
 import { Column, Entity, OneToMany, PrimaryGeneratedColumn } from "typeorm";
 import { City } from "../city/entities/city.entity.js";
 
-@Entity("Countries")
+@Entity("countries")
 export class Country {
     @PrimaryGeneratedColumn()
     id: number

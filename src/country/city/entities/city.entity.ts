@@ -2,7 +2,7 @@ import { Column, Entity, ManyToOne, OneToMany, PrimaryGeneratedColumn } from "ty
 import { Country } from "../../entities/country.entity.js";
 import { Department } from "../../department/entities/department.entity.js";
 
-@Entity("Cities")
+@Entity("cities")
 export class City {
     @PrimaryGeneratedColumn()
     id: number
@@ -12,4 +12,7 @@ export class City {
 
     @ManyToOne(() => Department, (department) => department.cities)
     department: Department
+
+    @ManyToOne(() => City)
+    city: City
 }
