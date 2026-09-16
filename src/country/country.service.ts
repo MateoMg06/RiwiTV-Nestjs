@@ -4,10 +4,13 @@ import { CreateCityDto } from './city/dto/create-city.dto.js';
 import { CreateDepartmentDto } from './department/dto/create-department.dto.js';
 import { DepartmentService } from './department/department.service.js';
 import { CityService } from './city/city.service.js';
+import { ICountryService } from './interfaces/country.interfaces.js';
 
 @Injectable()
-export class CountryService  {
-  constructor(private readonly departmentService: DepartmentService, private readonly cityService: CityService) {}
+export class CountryService implements ICountryService {
+  constructor(
+    @Injectable(Country) 
+    private readonly countryRepository: Repository<Country>, private readonly departmentService: DepartmentService, private readonly cityService: CityService) {}
   create(country: string) {
     return "d"
   }
