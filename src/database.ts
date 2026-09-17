@@ -21,4 +21,4 @@ import { Department } from "./country/department/entities/department.entity.js";
     ],
 })
 
-export class AppModule {}
+export class DatabaseModule {}

@@ -2,9 +2,9 @@ import { Module } from '@nestjs/common';
 import { createObserveModule } from '@nestjs/observe';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
-import { PaisModule } from './country/pais.module';
-import { DepartmentService } from './country/department/department.service';
-import { CityService } from './country/city/city.service';
+import { DatabaseModule } from './database.js';
+import { CountryModule } from './country/country.module.js';
+import { UtilsModule } from './utils/utils.module.js';
 
 export const { ObserveModule, ObserveInstrument } = createObserveModule();
 
@@ -17,9 +17,11 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
       appSecret: 'YOUR_APP_SECRET',
       serviceId: 'riwi-tv-nestjs',
     }),
-    PaisModule,
+    DatabaseModule,
+    CountryModule,
+    UtilsModule,
   ],
   controllers: [AppController],
-  providers: [AppService, DepartmentService, CityService],
+  providers: [AppService],
 })
 export class AppModule {}
