@@ -8,7 +8,7 @@ export class CountryController {
 
   @Post()
   create(@Body() dto: CreateCountryDto) {
-    return this.countryService.create(dto.country);
+    return this.countryService.create(dto);
   }
 
   @Get()
@@ -29,6 +29,6 @@ export class CountryController {
 
   @Get(':id/departamentos')
   findDepartmentsByCountry(@Param('id') countryId: number) {
-    return this.countryService.findDepartmentsByCountry(+countryId);
+    return this.countryService.getDepartments(+countryId);
   }
 }

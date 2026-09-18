@@ -9,6 +9,7 @@ export class Department {
 
     @Column()
     name: string
+    
 
     @OneToMany(() => City, (city) => city.department)
     cities: City[]

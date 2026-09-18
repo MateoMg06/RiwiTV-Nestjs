@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
 import { CreateCountryDto } from './dto/create-country.dto.js';
-import { CreateCityDto } from './city/dto/create-city.dto.js';
 import { Department } from './department/entities/department.entity.js';
 import { DepartmentService } from './department/department.service.js';
 import { CityService } from './city/city.service.js';
@@ -18,7 +17,7 @@ export class CountryService implements ICountryService {
    * 
    */
   
-    async create(dto:CreateCountryDto):Promise <Country>{
+  async create(dto:CreateCountryDto):Promise <Country>{
     const country = this.countryRepository.create(dto);
 
     return await this.countryRepository.save(country);

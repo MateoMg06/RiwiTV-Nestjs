@@ -1,4 +1,4 @@
-import { Column, Entity, ManyToOne, OneToMany, PrimaryGeneratedColumn } from "typeorm";
+import { Entity, ManyToOne, OneToMany, PrimaryGeneratedColumn } from "typeorm";
 import { Country } from "../../entities/country.entity.js";
 import { Department } from "../../department/entities/department.entity.js";
 
