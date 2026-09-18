@@ -1,9 +1,9 @@
-import { Global, Module } from "@nestjs/common";
-import ErrorHandler from "./errorHandler.js";
+// src/error/error.module.ts
+import { Module } from '@nestjs/common';
+import { APP_FILTER } from '@nestjs/core';
+import { AllExceptionsFilter } from '../common/utils/filters/all-exceptions.filter.js';
 
-@Global()
 @Module({
-    providers: [ErrorHandler],
-    exports: [ErrorHandler]
+  providers: [{ provide: APP_FILTER, useClass: AllExceptionsFilter }],
 })
 export class ErrorModule {}

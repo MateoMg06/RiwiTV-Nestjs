@@ -3,8 +3,8 @@ import { createObserveModule } from '@nestjs/observe';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { DatabaseModule } from './database.js';
-import { CountryModule } from './country/country.module.js';
-import { UtilsModule } from './utils/utils.module.js';
+import { CountryModule } from './modules/country/country.module.js';
+import { UtilsModule } from './common/utils/utils.module.js';
 import { ErrorModule } from './error/error.module.js';
 
 export const { ObserveModule, ObserveInstrument } = createObserveModule();

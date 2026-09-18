@@ -1,9 +1,9 @@
 import { Module } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
-import { Country } from "./country/entities/country.entity.js";
-import { CountryModule } from "./country/country.module.js";
-import { City } from "./country/city/entities/city.entity.js";
-import { Department } from "./country/department/entities/department.entity.js";
+import { Country } from "./modules/country/entities/country.entity.js";
+import { CountryModule } from "./modules/country/country.module.js";
+import { City } from "./modules/country/city/entities/city.entity.js";
+import { Department } from "./modules/country/department/entities/department.entity.js";
 
 @Module({
     imports: [
