@@ -5,6 +5,7 @@ import { AppService } from './app.service.js';
 import { DatabaseModule } from './database.js';
 import { CountryModule } from './country/country.module.js';
 import { UtilsModule } from './utils/utils.module.js';
+import { ErrorModule } from './error/error.module.js';
 
 export const { ObserveModule, ObserveInstrument } = createObserveModule();
 
@@ -20,6 +21,7 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
     DatabaseModule,
     CountryModule,
     UtilsModule,
+    ErrorModule
   ],
   controllers: [AppController],
   providers: [AppService],
