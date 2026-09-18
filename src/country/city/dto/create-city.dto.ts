@@ -2,7 +2,7 @@ import { IsString, IsNotEmpty, IsInt } from "class-validator";
 
 export class CreateCityDto {
     @IsString({message: 'El nombre de la ciudad no puede estar vacío'})
-    city: string;
+    name: string;
 
     @IsNotEmpty()
     @IsInt()
@@ -10,7 +10,7 @@ export class CreateCityDto {
 
     @IsNotEmpty()
     @IsInt()
-    DepartmentId: number
+    departmentId: number
     
 }
 

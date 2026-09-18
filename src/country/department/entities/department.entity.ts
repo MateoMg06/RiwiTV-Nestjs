@@ -1,6 +1,6 @@
 import { Column, Entity, ManyToOne, OneToMany, PrimaryGeneratedColumn } from "typeorm";
-import { City } from "../../city/entities/city.entity.js";
-import { Country } from "../../entities/country.entity.js";
+import type { City } from "../../city/entities/city.entity.js";
+import type { Country } from "../../entities/country.entity.js";
 
 @Entity("Departments")
 export class Department {
@@ -10,13 +10,9 @@ export class Department {
     @Column()
     name: string
     
-
-    @OneToMany(() => City, (city) => city.department)
+    @OneToMany("City", (city: City) => city.department)
     cities: City[]
 
-    @ManyToOne(() => Country, (country) => country.departments)
+    @ManyToOne("Country", (country: Country) => country.departments)
     country: Country
-    
 }
-
-

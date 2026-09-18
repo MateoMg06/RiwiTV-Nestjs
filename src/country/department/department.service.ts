@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
 import { IDepartmentService } from './interfaces/department.interface.js';
 import { Department } from './entities/department.entity.js';
 import { Repository } from 'typeorm';
@@ -10,7 +11,9 @@ import { CreateDepartmentDto } from './dto/create-department.dto.js';
 @Injectable()
 export class DepartmentService implements IDepartmentService {
     constructor(
-        private readonly departmentRepository : Repository<Department> ) {}
+        @InjectRepository(Department)
+        private readonly departmentRepository: Repository<Department>,
+    ) {}
     
 
     /**

@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
 import { CreateCountryDto } from './dto/create-country.dto.js';
 import { Department } from './department/entities/department.entity.js';
 import { DepartmentService } from './department/department.service.js';
@@ -10,7 +11,11 @@ import { Country } from './entities/country.entity.js';
 @Injectable()
 export class CountryService implements ICountryService {
   constructor(
-    private readonly countryRepository: Repository<Country>, private readonly departmentService: DepartmentService, private readonly cityService: CityService) {}
+    @InjectRepository(Country)
+    private readonly countryRepository: Repository<Country>,
+    private readonly departmentService: DepartmentService,
+    private readonly cityService: CityService,
+  ) {}
 
     /**
    * crea paises
