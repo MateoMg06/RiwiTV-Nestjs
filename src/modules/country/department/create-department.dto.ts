@@ -1,9 +1,10 @@
-import { IsBoolean, IsString, IsInt } from "class-validator";
+import { IsBoolean, IsString, IsInt, IsNotEmpty } from "class-validator";
 
 export class CreateDepartmentDto {
     @IsInt()
     id: number
 
+    @IsNotEmpty()
     @IsString()
     department: string;
 

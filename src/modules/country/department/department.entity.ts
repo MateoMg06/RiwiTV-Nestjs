@@ -1,6 +1,6 @@
 import { Column, Entity, ManyToOne, OneToMany, OneToOne, PrimaryGeneratedColumn } from "typeorm";
-import { City } from "../../city/entities/city.entity.js";
-import { Country } from "../../entities/country.entity.js";
+import { City } from "../city/city.entity.js";
+import { Country } from "../country.entity.js";
 
 @Entity("Countries")
 export class Department {

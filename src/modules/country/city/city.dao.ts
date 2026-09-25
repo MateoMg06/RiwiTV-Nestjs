@@ -1,7 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import { DataSource, Repository } from "typeorm";
-import { CreateCityDto } from "../dto/create-city.dto.js";
-import { City } from "../entities/city.entity.js";
+import { CreateCityDto } from "./create-city.dto.js";
+import { City } from "./city.entity.js";
 
 @Injectable()
 export class CityDao{

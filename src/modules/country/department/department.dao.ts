@@ -1,7 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import { DataSource, Repository } from "typeorm";
-import { CreateDepartmentDto } from "../dto/create-department.dto.js";
-import { Department } from "../entities/department.entity.js";
+import { CreateDepartmentDto } from "./create-department.dto.js";
+import { Department } from "./department.entity.js";
 
 @Injectable()
 export class DepartmentDao{
