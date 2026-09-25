@@ -6,6 +6,9 @@ import { DatabaseModule } from './database.js';
 import { CountryModule } from './modules/country/country.module.js';
 import { UtilsModule } from './common/utils/utils.module.js';
 import { ErrorModule } from './error/error.module.js';
+import { ConfigModule } from './config/config.module.js';
+import { ConfigService } from './config/config.service.js';
+import { Config } from './config/config.keys.js';
 
 export const { ObserveModule, ObserveInstrument } = createObserveModule();
 
@@ -21,9 +24,16 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
     DatabaseModule,
     CountryModule,
     UtilsModule,
-    ErrorModule
+    ErrorModule,
+    ConfigModule
   ],
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule {}
+export class AppModule {
+  static appPort: number | string
+
+  constructor(private readonly _configService: ConfigService){
+    AppModule.appPort= this._configService.get(Config.APP_PORT)
+  }
+}
