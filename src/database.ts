@@ -11,7 +11,7 @@ import { Department } from "./modules/country/department/entities/department.ent
             type: "postgres",
             host: process.env.POSTGRES_HOST || "db",
             port: Number(process.env.POSTGRES_PORT),
-            username: process.env.POSTRES_USER,
+            username: process.env.POSTGRES_USER,
             password: process.env.POSTGRES_PASSWORD,
             database: process.env.DB_CONTAINER_NAME,
             entities: [Country, City, Department],
