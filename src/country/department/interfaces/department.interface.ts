@@ -12,7 +12,7 @@ export interface IDepartmentService {
 
   findOne(id: number): Promise<Department | null>;
 
-  getCity(departmentId: number): Promise<City[]>;
+  getCities(departmentId: number): Promise<City[]>;
 
   create(dto: CreateDepartmentDto): Promise<Department>;
 

@@ -7,6 +7,10 @@ import { CityService } from './city/city.service.js';
 import { ICountryService } from './interfaces/country.interfaces.js';
 import { Repository } from 'typeorm';
 import { Country } from './entities/country.entity.js';
+import { CountryDao } from './dao/country.dao.js';
+import { DepartmentDao } from './department/dao/department.dao.js';
+import { CityDao } from './city/dao/city.dao.js';
+
 
 @Injectable()
 export class CountryService implements ICountryService {
@@ -15,6 +19,9 @@ export class CountryService implements ICountryService {
     private readonly countryRepository: Repository<Country>,
     private readonly departmentService: DepartmentService,
     private readonly cityService: CityService,
+    private readonly countryDao: CountryDao,
+    private readonly departmentDao: DepartmentDao,
+    private readonly cityDao: CityDao,
   ) {}
 
     /**
@@ -25,7 +32,7 @@ export class CountryService implements ICountryService {
   async create(dto:CreateCountryDto):Promise <Country>{
     const country = this.countryRepository.create(dto);
 
-    return await this.countryRepository.save(country);
+    return await this.countryDao.create(dto);
   }
 
   /**
@@ -34,7 +41,7 @@ export class CountryService implements ICountryService {
    */
   
   async findAll(): Promise<Country[]> {
-    return this.countryRepository.find();
+    return this.countryDao.findAll();
   }
 
   /**
@@ -43,7 +50,7 @@ export class CountryService implements ICountryService {
    */
   
   async findOne(id: number): Promise<Country | null> {
-    return this.countryRepository.findOneBy({ id });
+    return this.countryDao.findOne(id);
   }
 
   /**
@@ -53,7 +60,7 @@ export class CountryService implements ICountryService {
    */
   
   async remove(id: number): Promise<void> {
-    await this.countryRepository.delete(id);
+    await this.countryDao.remove(id);
   }
 
 
@@ -61,13 +68,11 @@ export class CountryService implements ICountryService {
    * obtiene los departamentos de un pais por id
    * 
    */
+  // ...existing code...
   async getDepartments(countryId: number): Promise<Department[]> {
-    const country = await this.countryRepository.findOne({
-      where: { id: countryId },
-      relations: { departments: true },
-    });
-    return country?.departments || [];
+    const departments = await this.countryDao.getDepartments(countryId);
+    return departments ?? [];
   }
+// ...existing code...
 }
 
-  

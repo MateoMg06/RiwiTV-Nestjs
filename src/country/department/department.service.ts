@@ -5,6 +5,7 @@ import { Department } from './entities/department.entity.js';
 import { Repository } from 'typeorm';
 import { City } from '../city/entities/city.entity.js';
 import { CreateDepartmentDto } from './dto/create-department.dto.js';
+import { DepartmentDao } from './dao/department.dao.js';
 
 
 
@@ -12,6 +13,7 @@ import { CreateDepartmentDto } from './dto/create-department.dto.js';
 export class DepartmentService implements IDepartmentService {
     constructor(
         @InjectRepository(Department)
+        private readonly departmentDao: DepartmentDao,
         private readonly departmentRepository: Repository<Department>,
     ) {}
     
@@ -21,9 +23,9 @@ export class DepartmentService implements IDepartmentService {
     * 
     */
     async create(dto:CreateDepartmentDto): Promise<Department>{
-        const department = this.departmentRepository.create(dto);
+        const department = this.departmentDao.create(dto);
 
-        return await this.departmentRepository.save(department)
+        return await this.departmentDao.create(dto)
     }
 
     /**
@@ -32,7 +34,7 @@ export class DepartmentService implements IDepartmentService {
      */
     
     async findAll(): Promise<Department[]> {
-        return this.departmentRepository.find();
+        return this.departmentDao.findAll();
     }
 
 
@@ -41,7 +43,7 @@ export class DepartmentService implements IDepartmentService {
      * 
      */
     async findOne(id: number): Promise<Department | null> {
-        return this.departmentRepository.findOneBy({id})
+        return this.departmentDao.findOne(id);
     }
 
     /**
@@ -51,21 +53,16 @@ export class DepartmentService implements IDepartmentService {
    */
   
   async remove(id: number): Promise<void> {
-    await this.departmentRepository.delete(id);
+    await this.departmentDao.remove(id);
   }
 
   /**
    * obtiene las ciudades de un departamento por id
    * 
    */
-  async getCity(departmentId: number): Promise<City[]> {
-    const department = await this.departmentRepository.findOne({
-      where: { id: departmentId },
-      relations: { cities: true },
-    });
-    return department?.cities || [];
+  async getCities(departmentId: number): Promise<City[]> {
+    const cities = await this.departmentDao.getCities(departmentId);
+    return cities ?? [];
   }
 
-
 }
-
