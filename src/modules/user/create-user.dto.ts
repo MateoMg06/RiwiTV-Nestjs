@@ -33,8 +33,9 @@ export class CreateUserDto {
     @IsNumber()
     documentNumber: number;
 
+    @IsNotEmpty()
     @IsDate()
-    birthDate: Date | null;
+    birthDate: Date;
 
     @IsNotEmpty()
     @IsString()

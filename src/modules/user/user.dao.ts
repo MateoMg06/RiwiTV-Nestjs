@@ -1,7 +1,6 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
-import { DataSource, Repository, FindOptionsRelations } from "typeorm";
+import { Injectable } from "@nestjs/common";
+import { DataSource, Repository } from "typeorm";
 import { User } from "./user.entity.js";
-import { CreateUserDto } from "./create-user.dto.js";
 import { City } from "../country/city/city.entity.js";
 
 @Injectable()
@@ -16,33 +15,33 @@ export class UserDao {
         return this.dataSource.getRepository(City)
     }
 
-    async create(dto: CreateUserDto): Promise<User>{
-        const city = await this.cityRepo.findOne({ where: { name: dto.city } });
-        if (!city) {
-            throw new NotFoundException(`City with name "${dto.city}" not found`);
-        }
-        
-        const { confirmEmail, confirmPassword, city: cityName, ...userData } = dto;
-        
-        if (!userData.birthDate) {
-            throw new Error("birthDate is required");
-        }
-        
-        const user = this.repo.create({
-            ...userData,
-            birthDate: userData.birthDate,
-            city: city
-        });
-        
-        return this.repo.save(user);
+    findAll(): Promise<User[]>{
+        return this.repo.find()
     }
 
-    async findById(id: number): Promise<User | null>{
-        const relations: FindOptionsRelations<User> = { city: true };
-        return this.repo.findOne({where: {id}, relations})
+    findById(id: number): Promise<User | null>{
+        return this.repo.findOne({where: {id}})
     }
 
-    async delete(id: number): Promise<void>{
-        await this.repo.delete({id})
+    findByEmail(email: string): Promise<User | null>{
+        return this.repo.findOne({where: {email}})
+    }
+
+    findCityByName(name: string): Promise<City | null>{
+        return this.cityRepo.findOne({where: {name}})
+    }
+
+    create(data: Partial<User>): Promise<User>{
+        return this.repo.save(this.repo.create(data));
+    }
+
+    async update(id: number, data: Partial<User>): Promise<User | null>{
+        await this.repo.update(id, data)
+        return this.findById(id)
+    }
+
+    async delete(id: number): Promise<boolean>{
+        const result= await this.repo.delete(id)
+        return (result.affected ?? 0) > 0
     }
 }
