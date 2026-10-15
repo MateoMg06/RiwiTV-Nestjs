@@ -6,6 +6,8 @@ import { City } from "./modules/country/city/city.entity.js";
 import { Department } from "./modules/country/department/department.entity.js";
 import { User } from "./modules/user/user.entity.js";
 import { UserModule } from "./modules/user/user.module.js";
+import { Movie } from "./modules/movie/movie.entity.js";
+import { MovieModule } from "./modules/movie/movie.module.js";
 
 @Module({
     imports: [
@@ -16,10 +18,10 @@ import { UserModule } from "./modules/user/user.module.js";
             username: process.env.POSTGRES_USER,
             password: process.env.POSTGRES_PASSWORD,
             database: process.env.DB_CONTAINER_NAME,
-            entities: [Country, City, Department, User],
+            entities: [Country, City, Department, User, Movie],
             synchronize: true
         }),
-        CountryModule, UserModule
+        CountryModule, UserModule, MovieModule
     ],
 })
 
