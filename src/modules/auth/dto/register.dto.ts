@@ -1,5 +1,6 @@
 import { OmitType } from '@nestjs/swagger';
 import { CreateUserDto } from '../../user/create-user.dto.js';
+import { IsNotEmpty, IsString, IsNumber } from 'class-validator';
 
 /**
  * DTO del registro PUBLICO.
@@ -19,4 +20,14 @@ import { CreateUserDto } from '../../user/create-user.dto.js';
  * El rol queda fuera del contrato publico. Asignar roles es tarea de un admin
  * autenticado, jamas del que se esta registrando.
  */
-export class RegisterDto extends OmitType(CreateUserDto, ['role'] as const) {}
+const BaseRegisterDto = OmitType(CreateUserDto, ['role'] as const);
+
+export class RegisterDto extends BaseRegisterDto {
+  @IsNotEmpty()
+  @IsString()
+  captchaToken: string;
+
+  @IsNotEmpty()
+  @IsNumber()
+  captchaAnswer: number;
+}

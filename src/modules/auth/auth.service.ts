@@ -20,6 +20,7 @@ import { TokenExpiry } from '../../common/utils/token-expiry.js';
 import { ConfigService } from '../../config/config.service.js';
 import { Config } from '../../config/config.keys.js';
 import { AccountStatus, UserRole } from '../../common/enums/domain.enums.js';
+import { Captcha, CaptchaChallenge } from '../../common/utils/captcha.js';
 
 /** Contexto de la peticion, necesario para auditar la sesion. */
 export interface SessionContext {
@@ -61,6 +62,7 @@ export class AuthService {
     private readonly jwt: Jwt,
     private readonly tokenExpiry: TokenExpiry,
     private readonly configService: ConfigService,
+    private readonly captcha: Captcha,
   ) {
     this.saltRounds = Number(process.env.SALT_ROUNDS ?? DEFAULT_SALT_ROUNDS);
     this.maxFailedAttempts = Number(
@@ -68,6 +70,16 @@ export class AuthService {
         process.env.MAX_FAILED_ATTEMPTS ??
         DEFAULT_MAX_ATTEMPTS,
     );
+  }
+
+  // ---------------------------------------------------------------- captcha
+
+  /**
+   * Genera un nuevo CAPTCHA para el registro.
+   * Publico porque se necesita antes de registrarse.
+   */
+  async getCaptcha(): Promise<CaptchaChallenge> {
+    return this.captcha.generateCaptcha();
   }
 
   // ---------------------------------------------------------------- register
@@ -94,6 +106,14 @@ export class AuthService {
   async register(
     dto: RegisterDto,
   ): Promise<{ user: AuthUser; activationToken?: string }> {
+    // Validar CAPTCHA antes de procesar el registro
+    if (!dto.captchaToken || typeof dto.captchaAnswer !== 'number') {
+      throw new BadRequestException('CAPTCHA requerido');
+    }
+    if (!this.captcha.verifyCaptcha(dto.captchaToken, dto.captchaAnswer)) {
+      throw new BadRequestException('Respuesta de CAPTCHA incorrecta');
+    }
+
     const user = await this.userService.create({ ...dto, role: UserRole.USUARIO });
 
     const activationToken = randomBytes(32).toString('hex');

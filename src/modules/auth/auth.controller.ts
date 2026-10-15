@@ -17,6 +17,7 @@ import { RegisterDto } from './dto/register.dto.js';
 import { Public } from '../../common/decorators/public.decorator.js';
 import type { AuthUser } from './interfaces/auth-response.interface.js';
 import type { AuthenticatedRequest } from './interfaces/authenticated-request.interface.js';
+import { CaptchaChallenge } from '../../common/utils/captcha.js';
 
 /** Nombres de las cookies de sesion, centralizados para no desincronizarlos. */
 const ACCESS_COOKIE = 'access_token';
@@ -25,6 +26,16 @@ const REFRESH_COOKIE = 'refresh_token';
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
+
+  /**
+   * Obtiene un CAPTCHA para el registro.
+   * Publico porque se necesita antes de registrarse.
+   */
+  @Public()
+  @Get('captcha')
+  async getCaptcha(): Promise<CaptchaChallenge> {
+    return this.authService.getCaptcha();
+  }
 
   /**
    * Registro.

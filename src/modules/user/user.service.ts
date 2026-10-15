@@ -10,6 +10,7 @@ import { UserDao } from './user.dao.js';
 import { User } from './user.entity.js';
 import { Bcrypt } from '../../common/utils/bcrypt.js';
 import { UserRole } from '../../common/enums/domain.enums.js';
+import { Password } from '../../common/utils/password.js';
 
 @Injectable()
 export class UserService {
@@ -18,6 +19,7 @@ export class UserService {
   constructor(
     private readonly userDao: UserDao,
     private readonly bcrypt: Bcrypt,
+    private readonly password: Password
   ) {}
 
   findAll(): Promise<User[]> {
@@ -33,9 +35,16 @@ export class UserService {
   async create(dto: CreateUserDto): Promise<User> {
     await this.assertEmailIsFree(dto.email);
 
+    const isValidPassword= await this.password.validatePassword(dto.password)
+    
+    if(!isValidPassword){
+      throw new BadRequestException("La contraseña no cumple con los parámetros requeridos")
+    }
+
     if (dto.password !== dto.confirmPassword) {
       throw new BadRequestException('Contraseñas no coinciden');
     }
+
     if (dto.email !== dto.confirmEmail) {
       throw new BadRequestException('Correos no coinciden');
     }
@@ -94,6 +103,11 @@ export class UserService {
     }
 
     if (dto.password) {
+      const isValidPassword= await this.password.validatePassword(dto.password)
+      
+      if(!isValidPassword){
+        throw new BadRequestException("La contraseña no cumple con los parámetros requeridos")
+      }
       if (!dto.confirmPassword) {
         throw new BadRequestException('Debe confirmar la contraseña');
       }
