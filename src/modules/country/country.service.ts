@@ -1,7 +1,4 @@
 import { Injectable } from '@nestjs/common';
-import { CreateCountryDto } from './create-country.dto.js';
-import { CreateCityDto } from './city/create-city.dto.js';
-import { CreateDepartmentDto } from './department/create-department.dto.js';
 import { DepartmentService } from './department/department.service.js';
 import { CityService } from './city/city.service.js';
 

@@ -8,79 +8,50 @@ import {
 } from '@nestjs/common';
 import { HttpAdapterHost } from '@nestjs/core';
 
-interface ErrorResponseBody {
-  statusCode: number;
-  message: string | string[];
-  path: string;
-  timestamp: string;
-}
-
-@Catch() // sin argumentos: atrapa TODO tipo de excepción
+@Catch() // sin argumentos: atrapa TODO
 export class AllExceptionsFilter implements ExceptionFilter {
   private readonly logger = new Logger(AllExceptionsFilter.name);
 
   constructor(private readonly httpAdapterHost: HttpAdapterHost) {}
 
   catch(exception: unknown, host: ArgumentsHost): void {
-    // HttpAdapterHost evita acoplarse a Express (funciona igual con Fastify)
     const { httpAdapter } = this.httpAdapterHost;
     const ctx = host.switchToHttp();
     const request = ctx.getRequest();
-    const response = ctx.getResponse();
 
     const isHttpException = exception instanceof HttpException;
-
     const status = isHttpException
       ? exception.getStatus()
       : HttpStatus.INTERNAL_SERVER_ERROR;
 
-    // En errores inesperados nunca se expone el detalle interno al cliente
-    const message = isHttpException
-      ? this.extractMessage(exception)
-      : 'Internal server error';
+    // getResponse() puede ser string u objeto { statusCode, message, error }.
+    // Con ValidationPipe, `message` es un array de strings.
+    let message: string | string[] = 'Internal server error';
+    if (isHttpException) {
+      const res = exception.getResponse();
+      message =
+        typeof res === 'string' ? res : ((res as any).message ?? exception.message);
+    }
 
-    this.logException(exception, status, httpAdapter.getRequestMethod(request), httpAdapter.getRequestUrl(request));
-
-    const body: ErrorResponseBody = {
-      statusCode: status,
-      message,
-      path: httpAdapter.getRequestUrl(request),
-      timestamp: new Date().toISOString(),
-    };
-
-    httpAdapter.reply(response, body, status);
-  }
-
-  /**
-   * getResponse() puede devolver un string o un objeto { statusCode, message, error }.
-   * Con ValidationPipe, `message` es un array de strings.
-   */
-  private extractMessage(exception: HttpException): string | string[] {
-    const res = exception.getResponse();
-
-    if (typeof res === 'string') return res;
-
-    const { message } = res as { message?: string | string[] };
-    return message ?? exception.message;
-  }
-
-  private logException(
-    exception: unknown,
-    status: number,
-    method: string,
-    url: string,
-  ): void {
-    const context = `${method} ${url}`;
-
+    // Los 5xx se loguean con stack; los 4xx son errores del cliente, basta un warn
     if (status >= 500) {
-      // Errores del servidor: log completo con stack
       this.logger.error(
-        context,
+        `${request.method} ${request.url}`,
         exception instanceof Error ? exception.stack : String(exception),
       );
     } else {
-      // Errores del cliente (4xx): basta un warning
-      this.logger.warn(`${context} -> ${status}`);
+      this.logger.warn(`${request.method} ${request.url} -> ${status}`);
     }
+
+    httpAdapter.reply(
+      ctx.getResponse(),
+      {
+        statusCode: status,
+        message, // nunca filtramos detalles internos en los 500
+        path: httpAdapter.getRequestUrl(request),
+        timestamp: new Date().toISOString(),
+      },
+      status,
+    );
   }
 }

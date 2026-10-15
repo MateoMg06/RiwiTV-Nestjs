@@ -1,0 +1,382 @@
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { BadRequestException, ForbiddenException, UnauthorizedException } from '@nestjs/common';
+import { AuthService } from './auth.service.js';
+import type { AuthDao } from './auth.dao.js';
+import type { UserService } from '../user/user.service.js';
+import type { UserDao } from '../user/user.dao.js';
+import type { RegisterDto } from './dto/register.dto.js';
+import type { Session } from './entities/session.entity.js';
+import type { User } from '../user/user.entity.js';
+import { Bcrypt } from '../../common/utils/bcrypt.js';
+import { Jwt } from '../../common/utils/jwt.js';
+import { TokenExpiry } from '../../common/utils/token-expiry.js';
+import { ConfigService } from '../../config/config.service.js';
+import { Config } from '../../config/config.keys.js';
+import { AccountStatus, UserRole } from '../../common/enums/domain.enums.js';
+
+/**
+ * Tests de la logica de autenticacion.
+ *
+ * Aqui se concentrates lo que de verdad importa: no se puede permitir que un
+ * refresh token robado siga sirviendo, ni que una cuenta inactiva inicie
+ * sesion, ni que un atacanteuer bloquee una cuenta ajena de forma permanente.
+ */
+
+const buildUser = (overrides: Partial<User> = {}): User =>
+  ({
+    id: 1,
+    name: 'Ana',
+    lastName: 'Restrepo',
+    email: 'ana@example.com',
+    password: 'hash-bcrypt',
+    role: UserRole.USUARIO,
+    accountStatus: AccountStatus.ACTIVE,
+    failedLoginAttempts: 0,
+    lockedUntil: null,
+    activationToken: null,
+    activationTokenExpires: null,
+    ...overrides,
+  }) as User;
+
+const buildSession = (overrides: Partial<Session> = {}): Session =>
+  ({
+    id: 10,
+    userId: 1,
+    refreshTokenHash: 'hash',
+    expiresAt: new Date(Date.now() + 60_000),
+    revokedAt: null,
+    lastUsedAt: null,
+    userAgent: null,
+    ip: null,
+    ...overrides,
+  }) as Session;
+
+const buildRegisterDto = (overrides: Partial<RegisterDto> = {}): RegisterDto =>
+  ({
+    name: 'Ana',
+    lastName: 'Restrepo',
+    email: 'ana@example.com',
+    confirmEmail: 'ana@example.com',
+    password: 'Contrasena1!',
+    confirmPassword: 'Contrasena1!',
+    phone: '+573001234567',
+    documentType: 'CC',
+    documentNumber: 'CC123456',
+    birthDate: new Date('1995-01-01'),
+    acceptsDataProcessing: true,
+    acceptsTerms: true,
+    acceptsNotifications: false,
+    ...overrides,
+  }) as RegisterDto;
+
+describe('AuthService', () => {
+  let authDao: AuthDao;
+  let userService: UserService;
+  let userDao: UserDao;
+  let bcrypt: Bcrypt;
+  let jwt: Jwt;
+  let tokenExpiry: TokenExpiry;
+  let configService: ConfigService;
+  let service: AuthService;
+
+  beforeEach(() => {
+    authDao = {
+      createSession: vi.fn(),
+      findByRefreshTokenHash: vi.fn(),
+      findActiveSessions: vi.fn(),
+      revokeSession: vi.fn(),
+      revokeAllSessions: vi.fn(),
+      touchSession: vi.fn(),
+      purgeExpired: vi.fn(),
+    } as unknown as AuthDao;
+
+    userService = {
+      create: vi.fn(),
+      findOne: vi.fn(),
+    } as unknown as UserService;
+
+    userDao = {
+      findByEmailWithPassword: vi.fn(),
+      findByActivationToken: vi.fn(),
+      update: vi.fn(),
+    } as unknown as UserDao;
+
+    // Se usa el Bcrypt real: el objetivo es verificar que el camino feliz
+    // funciona con la libreria de verdad, no con un doble que siempre dice
+    // "si". El coste de bcrypt en unos pocos tests es aceptable.
+    bcrypt = new Bcrypt();
+
+    jwt = new Jwt();
+
+    tokenExpiry = new TokenExpiry();
+
+    configService = {
+      get: vi.fn((key: string) => {
+        const map: Record<string, string> = {
+          [Config.JWT_SECRET]: 'secreto-de-acceso',
+          [Config.JWT_REFRESH_SECRET]: 'secreto-de-refresco',
+        };
+        return map[key];
+      }),
+    } as unknown as ConfigService;
+
+    service = new AuthService(
+      authDao,
+      userService,
+      userDao,
+      bcrypt,
+      jwt,
+      tokenExpiry,
+      configService,
+    );
+  });
+
+  describe('register', () => {
+    it('fuerza el rol USUARIO aunque el cliente intente enviar otro', async () => {
+      (userService.create as ReturnType<typeof vi.fn>).mockResolvedValue(buildUser());
+
+      const dto = buildRegisterDto();
+      // Se simula un cliente malicioso que inyecta el campo a mano.
+      await service.register({ ...dto, role: UserRole.ADMIN } as unknown as RegisterDto);
+
+      expect(userService.create).toHaveBeenCalledWith(
+        expect.objectContaining({ role: UserRole.USUARIO }),
+      );
+    });
+
+    it('genera un token de activacion y lo persiste', async () => {
+      (userService.create as ReturnType<typeof vi.fn>).mockResolvedValue(buildUser());
+      (userDao.update as ReturnType<typeof vi.fn>).mockResolvedValue(buildUser());
+
+      const result = await service.register(buildRegisterDto());
+
+      expect(result.activationToken).toMatch(/^[0-9a-f]{64}$/);
+      expect(userDao.update).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({
+          activationToken: result.activationToken,
+          activationTokenExpires: expect.any(Date),
+        }),
+      );
+    });
+
+    it('devuelve el token solo fuera de produccion', async () => {
+      const previous = process.env.NODE_ENV;
+
+      try {
+        process.env.NODE_ENV = 'production';
+        (userService.create as ReturnType<typeof vi.fn>).mockResolvedValue(buildUser());
+        (userDao.update as ReturnType<typeof vi.fn>).mockResolvedValue(buildUser());
+
+        const result = await service.register(buildRegisterDto());
+
+        // En produccion el token viaja por correo; devolverlo aqui equivaldria
+        // a no verificar nada.
+        expect(result.activationToken).toBeUndefined();
+      } finally {
+        process.env.NODE_ENV = previous;
+      }
+    });
+  });
+
+  describe('activate', () => {
+    it('rechaza un token inexistente', async () => {
+      (userDao.findByActivationToken as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+
+      await expect(service.activate('x'.repeat(64))).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+    });
+
+    it('rechaza un token expirado', async () => {
+      (userDao.findByActivationToken as ReturnType<typeof vi.fn>).mockResolvedValue(
+        buildUser({
+          activationToken: 'x'.repeat(64),
+          activationTokenExpires: new Date(Date.now() - 1_000),
+        }),
+      );
+
+      await expect(service.activate('x'.repeat(64))).rejects.toThrow(/expirado/);
+    });
+
+    it('activa la cuenta e invalida el token en la misma operacion', async () => {
+      (userDao.findByActivationToken as ReturnType<typeof vi.fn>).mockResolvedValue(
+        buildUser({
+          accountStatus: AccountStatus.INACTIVE,
+          activationToken: 'x'.repeat(64),
+          activationTokenExpires: new Date(Date.now() + 60_000),
+        }),
+      );
+      (userDao.update as ReturnType<typeof vi.fn>).mockResolvedValue(
+        buildUser({ accountStatus: AccountStatus.ACTIVE }),
+      );
+
+      const result = await service.activate('x'.repeat(64));
+
+      expect(result.id).toBe(1);
+      expect(userDao.update).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({
+          accountStatus: AccountStatus.ACTIVE,
+          activationToken: null,
+          activationTokenExpires: null,
+        }),
+      );
+    });
+  });
+
+  describe('login', () => {
+    it('rechaza una contrasena incorrecta con el mismo mensaje que un correo inexistente', async () => {
+      (userDao.findByEmailWithPassword as ReturnType<typeof vi.fn>).mockResolvedValue(
+        buildUser(),
+      );
+
+      const conUsuario = service.login({ email: 'ana@example.com', password: 'mala' });
+      const sinUsuario = service.login({ email: 'nadie@example.com', password: 'mala' });
+
+      await expect(conUsuario).rejects.toThrow('Correo o contrasena incorrectos');
+      await expect(sinUsuario).rejects.toThrow('Correo o contrasena incorrectos');
+    });
+
+    it('no filtra si el correo existe: compara siempre contra bcrypt', async () => {
+      (userDao.findByEmailWithPassword as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+      const spy = vi.spyOn(bcrypt, 'comparePassword');
+
+      await service.login({ email: 'nadie@example.com', password: 'mala' }).catch(() => {});
+
+      // Aunque el usuario no exista, se ejecuta la comparacion: si no, el tiempo
+      // de respuesta revelaria que correos estan registrados.
+      expect(spy).toHaveBeenCalledTimes(1);
+    });
+
+    it('cuenta un intento fallido sin bloquear por debajo del maximo', async () => {
+      const user = buildUser();
+      (userDao.findByEmailWithPassword as ReturnType<typeof vi.fn>).mockResolvedValue(user);
+      (userDao.update as ReturnType<typeof vi.fn>).mockResolvedValue(user);
+
+      await service.login({ email: 'ana@example.com', password: 'mala' }).catch(() => {});
+
+      // `lockedUntil` NO aparece en el parche: la cuenta sigue desbloqueada.
+      // Escribir `undefined` daria el mismo resultado en la base, pero a costa
+      // de perder la intencion del codigo.
+      const patch = (userDao.update as ReturnType<typeof vi.fn>).mock.calls[0][1];
+      expect(patch.failedLoginAttempts).toBe(1);
+      expect(patch).not.toHaveProperty('lockedUntil');
+    });
+
+    it('bloquea temporalmente al alcanzar el maximo de intentos', async () => {
+      const user = buildUser({ failedLoginAttempts: 4 });
+      (userDao.findByEmailWithPassword as ReturnType<typeof vi.fn>).mockResolvedValue(user);
+      (userDao.update as ReturnType<typeof vi.fn>).mockResolvedValue(user);
+
+      await service.login({ email: 'ana@example.com', password: 'mala' }).catch(() => {});
+
+      // El quinto intento falla (5 >= 5) y bloquea 15 minutos, reiniciando el
+      // contador para que el bloqueo caduque solo.
+      const patch = (userDao.update as ReturnType<typeof vi.fn>).mock.calls[0][1];
+      expect(patch.lockedUntil).toBeInstanceOf(Date);
+      expect(patch.failedLoginAttempts).toBe(0);
+    });
+
+    it('impide iniciar sesion a una cuenta inactiva', async () => {
+      // Aqui la contrasena SI es correcta: lo que se prueba es el estado de la
+      // cuenta, no la verificacion de la clave.
+      vi.spyOn(bcrypt, 'comparePassword').mockResolvedValue(true);
+
+      const user = buildUser({ accountStatus: AccountStatus.INACTIVE });
+      (userDao.findByEmailWithPassword as ReturnType<typeof vi.fn>).mockResolvedValue(user);
+
+      await expect(
+        service.login({ email: 'ana@example.com', password: 'la-correcta' }),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('impide iniciar sesion a una cuenta bloqueada', async () => {
+      vi.spyOn(bcrypt, 'comparePassword').mockResolvedValue(true);
+
+      const user = buildUser({ lockedUntil: new Date(Date.now() + 60_000) });
+      (userDao.findByEmailWithPassword as ReturnType<typeof vi.fn>).mockResolvedValue(user);
+
+      await expect(
+        service.login({ email: 'ana@example.com', password: 'la-correcta' }),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+  });
+
+  describe('refresh', () => {
+    it('rechaza un token desconocido', async () => {
+      (authDao.findByRefreshTokenHash as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+
+      await expect(service.refresh('desconocido')).rejects.toBeInstanceOf(
+        UnauthorizedException,
+      );
+    });
+
+    it('rechaza una sesion expirada', async () => {
+      (authDao.findByRefreshTokenHash as ReturnType<typeof vi.fn>).mockResolvedValue(
+        buildSession({ expiresAt: new Date(Date.now() - 1_000) }),
+      );
+
+      await expect(service.refresh('token')).rejects.toThrow(/expiro/);
+    });
+
+    it('detecta reutilizacion y revoca TODAS las sesiones del usuario', async () => {
+      (authDao.findByRefreshTokenHash as ReturnType<typeof vi.fn>).mockResolvedValue(
+        buildSession({ revokedAt: new Date() }),
+      );
+
+      await expect(service.refresh('token')).rejects.toBeInstanceOf(
+        UnauthorizedException,
+      );
+
+      // Es la respuesta al unico indicador fiable de robo de token: no se sabe
+      // cual de las dos presentaciones es la falsa, asi que se cae todas.
+      expect(authDao.revokeAllSessions).toHaveBeenCalledWith(1);
+    });
+
+    it('rechaza el refresh si la cuenta fue desactivada despues', async () => {
+      (authDao.findByRefreshTokenHash as ReturnType<typeof vi.fn>).mockResolvedValue(
+        buildSession(),
+      );
+      // Sin refresh, una cuenta suspendida podria seguir operando con un access
+      // token de larga duracion.
+      (userService.findOne as ReturnType<typeof vi.fn>).mockResolvedValue(
+        buildUser({ accountStatus: AccountStatus.INACTIVE }),
+      );
+
+      await expect(service.refresh('token')).rejects.toBeInstanceOf(
+        ForbiddenException,
+      );
+    });
+
+    it('rota el token revocando la sesion anterior', async () => {
+      const session = buildSession();
+      (authDao.findByRefreshTokenHash as ReturnType<typeof vi.fn>).mockResolvedValue(session);
+      (userService.findOne as ReturnType<typeof vi.fn>).mockResolvedValue(buildUser());
+      (authDao.createSession as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+
+      await service.refresh('token');
+
+      expect(authDao.revokeSession).toHaveBeenCalledWith(session.id);
+      expect(authDao.createSession).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('logout', () => {
+    it('no falla si la sesion ya no existe', async () => {
+      (authDao.findByRefreshTokenHash as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+
+      await expect(service.logout('token')).resolves.toBeUndefined();
+      expect(authDao.revokeSession).not.toHaveBeenCalled();
+    });
+
+    it('revoca la sesion activa', async () => {
+      const session = buildSession();
+      (authDao.findByRefreshTokenHash as ReturnType<typeof vi.fn>).mockResolvedValue(session);
+
+      await service.logout('token');
+
+      expect(authDao.revokeSession).toHaveBeenCalledWith(session.id);
+    });
+  });
+});

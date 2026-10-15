@@ -1,47 +1,95 @@
-import { Injectable } from "@nestjs/common";
-import { DataSource, Repository } from "typeorm";
-import { User } from "./user.entity.js";
-import { City } from "../country/city/city.entity.js";
+import { Injectable } from '@nestjs/common';
+import { DataSource, Repository } from 'typeorm';
+import { User } from './user.entity.js';
 
+/**
+ * Acceso a datos de usuarios.
+ *
+ * REGLA: el DAO solo habla con `User`. Si alguna vez necesita consultar otra
+ * tabla (por ejemplo, resolver el nombre de una ciudad), eso pertenece a un
+ * servicio que inyecta ambos DAOs. Mezclar repositorios aqui crea acoplamiento
+ * oculto y hace imposible testear el DAO sin montar media base de datos.
+ */
 @Injectable()
 export class UserDao {
-    constructor(private readonly dataSource: DataSource){}
+  constructor(private readonly dataSource: DataSource) {}
 
-    private get repo(): Repository<User>{
-        return this.dataSource.getRepository(User)
-    }
+  private get repo(): Repository<User> {
+    return this.dataSource.getRepository(User);
+  }
 
-    private get cityRepo(): Repository<City>{
-        return this.dataSource.getRepository(City)
-    }
+  findAll(): Promise<User[]> {
+    return this.repo.find();
+  }
 
-    findAll(): Promise<User[]>{
-        return this.repo.find()
-    }
+  findById(id: number): Promise<User | null> {
+    return this.repo.findOne({ where: { id } });
+  }
 
-    findById(id: number): Promise<User | null>{
-        return this.repo.findOne({where: {id}})
-    }
+  /**
+   * `password` esta declarado con `select: false` en la entidad, asi que
+   * NUNCA sale en las consultas normales. Esto es intencional: sin esto, un
+   * `findAll()` devuelto por el controller expondría los hashes a cualquier
+   * endpoint de listado.
+   */
+  findByEmail(email: string): Promise<User | null> {
+    return this.repo.findOne({ where: { email } });
+  }
 
-    findByEmail(email: string): Promise<User | null>{
-        return this.repo.findOne({where: {email}})
-    }
+  /**
+   * Consulta EXPLICITA que si trae el hash. Solo debe llamarla el flujo de
+   * login: es el unico punto del sistema que necesita comparar contrasenas.
+   *
+   * Si se olvida `addSelect`, TypeORM devuelve `password: undefined` y el
+   * login fallaria siempre, de forma confusa. Por eso el select va explicito.
+   */
+  findByEmailWithPassword(email: string): Promise<User | null> {
+    return this.repo
+      .createQueryBuilder('user')
+      .addSelect('user.password')
+      .addSelect('user.failedLoginAttempts')
+      .addSelect('user.lockedUntil')
+      .addSelect('user.accountStatus')
+      .where('user.email = :email', { email })
+      .getOne();
+  }
 
-    findCityByName(name: string): Promise<City | null>{
-        return this.cityRepo.findOne({where: {name}})
-    }
+  findByDocumentNumber(documentNumber: string): Promise<User | null> {
+    return this.repo.findOne({ where: { documentNumber } });
+  }
 
-    create(data: Partial<User>): Promise<User>{
-        return this.repo.save(this.repo.create(data));
-    }
+  /**
+   * Busca el usuario por su token de activacion.
+   *
+   * Igual que `findByEmailWithPassword`, requiere `addSelect` explicito: la
+   * columna esta declarada con `select: false` y sin esto devolveria `undefined`
+   * en el WHERE, haciendo que la activacion fallara siempre.
+   *
+   * La busqueda es por el token EN CRUDO y no por su hash. A diferencia del
+   * refresh token, aqui no se guarda hash: el token de activacion no da acceso
+   * a la sesion, solo habilita una cuenta que el propio usuario acaba de crear.
+   * Aun asi, viaja por correo y tiene caducidad de 24 horas.
+   */
+  findByActivationToken(token: string): Promise<User | null> {
+    return this.repo
+      .createQueryBuilder('user')
+      .addSelect('user.activationToken')
+      .addSelect('user.activationTokenExpires')
+      .where('user.activationToken = :token', { token })
+      .getOne();
+  }
 
-    async update(id: number, data: Partial<User>): Promise<User | null>{
-        await this.repo.update(id, data)
-        return this.findById(id)
-    }
+  create(data: Partial<User>): Promise<User> {
+    return this.repo.save(this.repo.create(data));
+  }
 
-    async delete(id: number): Promise<boolean>{
-        const result= await this.repo.delete(id)
-        return (result.affected ?? 0) > 0
-    }
+  async update(id: number, data: Partial<User>): Promise<User | null> {
+    await this.repo.update(id, data);
+    return this.findById(id);
+  }
+
+  async delete(id: number): Promise<boolean> {
+    const result = await this.repo.delete(id);
+    return (result.affected ?? 0) > 0;
+  }
 }
