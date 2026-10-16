@@ -16,6 +16,10 @@ export class CityDao{
         return this.repo.save(City)
     }
 
+    async findActiveByDepartmentId(departmentId: number): Promise<City[]>{
+        return this.repo.find({where: {department: {id: departmentId}, isActive: true}, order: {name: "ASC"}})
+    }
+
     async findById(id: number): Promise<City | null>{
         return this.repo.findOne({where: {id}})
     }

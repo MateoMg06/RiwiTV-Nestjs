@@ -1,4 +1,9 @@
-import { PartialType } from '@nestjs/mapped-types';
+import { OmitType, PartialType } from '@nestjs/mapped-types';
 import { CreateUserDto } from './create-user.dto.js';
 
-export class UpdateUserDto extends PartialType(CreateUserDto) {}
+/**
+ * Sin `cityId`: la ciudad solo cambia por `POST /users/location`, que aplica
+ * RN-006 (ciudad activa con cine activo). Con `forbidNonWhitelisted`, enviarlo
+ * aquí da 400.
+ */
+export class UpdateUserDto extends PartialType(OmitType(CreateUserDto, ['cityId'] as const)) {}

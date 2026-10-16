@@ -1,10 +1,14 @@
 import { Module } from '@nestjs/common';
 import { UserService } from './user.service.js';
 import { UserController } from './user.controller.js';
+import { UsersLocationController } from './users-location.controller.js';
 import { UserDao } from './user.dao.js';
+import { CountryModule } from '../country/country.module.js';
+import { CinemaModule } from '../cinema/cinema.module.js';
 
 @Module({
-  controllers: [UserController],
+  imports: [CountryModule, CinemaModule],
+  controllers: [UserController, UsersLocationController],
   providers: [UserService, UserDao],
   // Se exportan porque AuthModule los necesita: el registro de usuarios vive
   // en UserService, y el login necesita consultar el hash de contrasena. Sin

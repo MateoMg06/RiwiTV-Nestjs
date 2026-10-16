@@ -9,7 +9,7 @@
 | HU | Estado | Hecho en Nest | Falta |
 |---|---|---|---|
 | HU-001 | Parcial | Capas, `.env` obligatorio, Docker Compose, Swagger, logger, Vitest, oxlint, Prettier, Helmet, CORS, `GET /api/v1/health` | Migraciones automáticas al arrancar (hoy `synchronize: true`), ambientes Dev/QA/Prod |
-| HU-002 | Parcial | Entidades Country/Department/City | Services stub, ruta `pais`; rutas `/countries`, `/departments/:countryId`, `/cities/:departmentId`; no permitir ciudades inactivas; ciudad con al menos un cine activo (RN-006); `POST /users/location` |
+| HU-002 | Completa salvo prueba manual | Entidades; `GET /countries`, `/departments/:countryId`, `/cities/:departmentId` (públicas, ciudades solo activas); `POST /users/location` (JWT) con RN-006; entidad `Cinema` mínima; `npm run seed` | Prueba manual contra Postgres (seed + `POST /api/users/location`) |
 | HU-003 | No iniciada | — | Movie, Showtime, Cinema (lectura); cartelera de 7 días y de hoy, solo funciones activas; filtros fecha, género, clasificación, idioma, tipo de sala, formato, complejo y "Disponible" (base en `origin/feature/movie-module`) |
 | HU-004 | No iniciada | — | Detalle completo (incluye precio por formato y calificación promedio), funciones futuras de la ciudad, recomendaciones |
 | HU-005 | No iniciada | — | Próximos estrenos ordenados por fecha, contador regresivo, `ReleaseNotification` sin duplicados (RN-019), correo al pasar a "En Cartelera" (RN-020) |
@@ -39,6 +39,14 @@
 - Cookie del access token: `accessToken` (igual que el original).
 - `.env` obligatorio en todos los entornos; en Docker se monta como volumen.
 - HU-001: `HealthService` usa `DataSource` directamente (`SELECT 1`), sin DAO ni `@nestjs/terminus`: no hay entidad y sería una capa o dependencia con un solo uso (`agent.md` §4.1).
+- HU-002: las respuestas de `/countries`, `/departments/:countryId` y `/cities/:departmentId` usan los nombres de campo del original (`{id, country}`, `{id, department, countryId}`, `{id, city, departmentId, active}`) por compatibilidad con el frontend; las entidades conservan `name`/`isActive` y el service hace el mapeo.
+- HU-002: solo las ciudades se filtran por activas; países y departamentos se listan todos (igual que el original).
+- HU-002: RN-006 se aplica al guardar la ubicación (`POST /users/location`), no en el listado de ciudades.
+- HU-002: solo `POST /users/location` (el `PUT` del original queda fuera). Mensajes y orden de validación del original: 404 usuario, 404 ciudad, 422 ciudad inactiva, 422 sin cines activos.
+- HU-002: la respuesta es `{ message, user: { id, name, lastName, email, role, cityId } }`; nunca la entidad completa (sin `password`, tokens ni contadores de bloqueo). La identidad es `request.user.id` del token; cualquier rol.
+- HU-002: `cityId` solo cambia por `/users/location`. `UpdateUserDto` ya no lo acepta (`PATCH /user/:id` con `cityId` da 400) para no saltarse RN-006. El alta/registro sigue aceptándolo (no se cambió).
+- HU-002: tabla `Cinemas` con `name`, `isActive` y `city` (estilo Nest, no `active`/`cityId` del original). Solo `CinemaDao.countActiveByCityId`; sin service ni controller.
+- HU-002: seed mínimo `src/seeders/seed.ts`, idempotente (busca por nombre). Crea Colombia, Antioquia, Medellín (activa, con cine «Multicine Riwi Centro»), Envigado (activa, sin cines) y Bello (inactiva). Ejecutar: `npm run build && npm run seed` (en Docker: `docker compose exec app npm run seed`). Reutiliza `typeOrmOptions` exportado de `src/database.ts`. (HU-003 lo amplía: ver abajo.)
 
 ## Pendientes
 
@@ -50,7 +58,9 @@ Transversales:
 Por historia:
 - [x] HU-001: `GET /api/v1/health` (200).
 - [ ] HU-001: migración inicial TypeORM ejecutada al arrancar y quitar `synchronize: true`; seeders de demostración.
-- [ ] HU-002: completar Country/Department/City (solo lectura, activos, RN-006); `POST /users/location`.
+- [x] HU-002 paso 1: lecturas de ubicación.
+- [x] HU-002 paso 2: `POST /users/location` con Cinema mínima y RN-006 al guardar.
+- [ ] HU-002: prueba manual contra Postgres (seed + login + `POST /api/users/location`: 200, 404, 422 inactiva, 422 sin cines).
 - [ ] HU-003: módulo Movie + Showtime + Cinema (lectura); cartelera de 7 días y de hoy; filtros (incluye "Disponible", RN-011).
 - [ ] HU-004: detalle completo con precio por formato; funciones futuras de la ciudad; recomendaciones.
 - [ ] HU-005: próximos estrenos; `POST /notifications/upcoming` sin duplicados; correo al pasar a "En Cartelera".
@@ -59,6 +69,12 @@ Por historia:
 - [ ] HU-008: `GET`/`PUT /profile`, `GET /membership`, `/membership/benefits`; reservas activas; cambio de correo con nueva validación.
 - [ ] HU-009: `GET /functions/:id`, `/prices`; solo funciones activas y no iniciadas.
 - [ ] HU-010: `GET /functions/:id/seats`, `POST /reservations/lock-seats`, `DELETE /reservations/release-seats`, `GET /reservations/summary`; job de liberación (`@nestjs/schedule`); máximo de sillas por función; auditoría de bloqueos; variable `SEAT_LOCK_MINUTES`.
+
+## Código sin uso
+
+Para borrar en un commit aparte:
+- `src/modules/country/create-country.dto.ts`, `department/create-department.dto.ts`, `city/create-city.dto.ts`.
+- Métodos `create` y `delete` de `CountryDao`, `DepartmentDao` y `CityDao`.
 
 ## Fuera de alcance
 
@@ -89,6 +105,30 @@ No se implementa (no pertenece a HU-001 a HU-010):
 18. [ ] HU-007: la respuesta de login no incluye membresía, beneficios ni datos del perfil — `src/modules/auth/auth.service.ts`.
 
 ## Registro de cambios
+
+### 2026-10-15 — feat(HU-002): `POST /users/location` con RN-006, Cinema mínima y seed (paso 2)
+- **Archivos:** `src/modules/cinema/{cinema.entity,cinema.dao,cinema.module,cinema.dao.spec}.ts` (nuevos), `src/modules/user/{set-location.dto,users-location.controller}.ts` y sus specs (nuevos), `src/modules/user/update-user.dto.spec.ts` (nuevo), `src/modules/user/user.service.ts`, `user.service.spec.ts`, `user.module.ts`, `update-user.dto.ts`, `src/database.ts`, `src/seeders/seed.ts` (nuevo), `package.json` (script `seed`), `agent.md` (§5.1 fila HU-002 `/users/location`).
+- **Qué:** `POST /api/users/location` (JWT, cualquier rol, 200) guarda `cityId` del usuario del token. Orden: 404 «Usuario no encontrado», 404 «Ciudad no encontrada», 422 «La ciudad está inactiva», 422 «La ciudad no tiene cines activos» (RN-006). `UpdateUserDto` pierde `cityId` y `UserService.update` ya no lo trata aparte: `PATCH /user/:id` con `cityId` da 400. `database.ts` exporta `typeOrmOptions` (usado por app y seed) y registra `Cinema`. Script `npm run seed` (`node dist/seeders/seed.js`). `UserModule` importa `CountryModule` y `CinemaModule` (sin dependencia circular: build correcto).
+- **Por qué:** HU-002 (ubicación del usuario) y RN-006; cierra el bypass de RN-006 por `PATCH /user/:id`.
+- **Impacto:** endpoint nuevo; nueva tabla `Cinemas` (por `synchronize: true`); `PATCH /api/user/:id` ya no admite `cityId`. Sin variables de entorno nuevas.
+- **Verificación:** `npm run test` ✅ (139/139) · `npm run lint` ✅ · `npm run build` ✅ (`dist/seeders/seed.js` generado). Sin prueba manual: no hay Postgres levantado; el seed no se ejecutó.
+- **Pendiente derivado:** prueba manual con Postgres; borrar código sin uso.
+
+### 2026-10-15 — test(HU-002): 400 por id no numérico en departamentos y ciudades
+- **Archivos:** `src/modules/country/location.controller.spec.ts`.
+- **Qué:** 2 tests que comprueban (vía `ROUTE_ARGS_METADATA`) que `countryId` y `departmentId` usan `ParseIntPipe` y que este rechaza `'abc'` con `BadRequestException`. Sin cambio de comportamiento.
+- **Por qué:** corrección de la revisión del paso 1 de HU-002.
+- **Impacto:** ninguno en runtime.
+- **Verificación:** `npm run test` ✅ (120/120) · `npm run lint` ✅ · `npm run build` ✅.
+- **Pendiente derivado:** ninguno.
+
+### 2026-10-15 — feat(HU-002): lecturas de ubicación (paso 1)
+- **Archivos:** `src/modules/country/location.controller.ts` (nuevo), `country.module.ts`, `country.service.ts`, `country.dao.ts`, `department/department.service.ts`, `department/department.dao.ts`, `city/city.service.ts`, `city/city.dao.ts`, specs de los tres services y del controller; eliminado `country.controller.ts`; `agent.md` (§5.1 fila HU-002).
+- **Qué:** `GET /api/countries`, `GET /api/departments/:countryId`, `GET /api/cities/:departmentId`, públicos, ids con `ParseIntPipe` (400). País o departamento inexistente: 404 «País no encontrado» / «Departamento no encontrado». Ciudades solo activas y ordenadas por nombre. Se elimina la ruta stub `pais` y los métodos stub de `CountryService`.
+- **Por qué:** HU-002 (lecturas); mismas rutas y formas de respuesta que el original.
+- **Impacto:** nuevas rutas sin token; `GET /api/pais` deja de existir. `CountryModule` exporta `CityDao` (para el paso 2).
+- **Verificación:** `npm run test` ✅ (118/118, 9 nuevos) · `npm run lint` ✅ · `npm run build` ✅. Sin prueba contra Postgres.
+- **Pendiente derivado:** paso 2 (`POST /users/location`, Cinema mínima, RN-006); borrar código sin uso.
 
 ### 2026-10-15 — feat(HU-001): health check `GET /api/v1/health`
 - **Archivos:** `src/modules/health/health.module.ts`, `src/modules/health/health.controller.ts`, `src/modules/health/health.service.ts`, `src/modules/health/health.controller.spec.ts`, `src/modules/health/health.service.spec.ts`, `src/app.module.ts`, `docker-compose.yml`

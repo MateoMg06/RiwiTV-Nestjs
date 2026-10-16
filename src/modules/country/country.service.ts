@@ -1,24 +1,12 @@
 import { Injectable } from '@nestjs/common';
-import { DepartmentService } from './department/department.service.js';
-import { CityService } from './city/city.service.js';
+import { CountryDao } from './country.dao.js';
 
 @Injectable()
-export class CountryService  {
-  constructor(private readonly departmentService: DepartmentService, private readonly cityService: CityService) {}
-  create(_country: string) {
-    return "d"
-  }
+export class CountryService {
+  constructor(private readonly countryDao: CountryDao) {}
 
-  findAll() {
-    return `This action returns all countries`;
-  }
-
-  findOne(id: number) {
-    return `This action returns a #${id} country`;
-  }
-
-  remove(id: number) {
-    return `This action removes a #${id} country`;
+  async findAll() {
+    const countries = await this.countryDao.findAll();
+    return countries.map((c) => ({ id: c.id, country: c.name }));
   }
 }
-  

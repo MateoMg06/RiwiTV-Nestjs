@@ -3,6 +3,7 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  UnprocessableEntityException,
 } from '@nestjs/common';
 import { CreateUserDto } from './create-user.dto.js';
 import { UpdateUserDto } from './update-user.dto.js';
@@ -11,6 +12,8 @@ import { User } from './user.entity.js';
 import { Bcrypt } from '../../common/utils/bcrypt.js';
 import { UserRole } from '../../common/enums/domain.enums.js';
 import { Password } from '../../common/utils/password.js';
+import { CityDao } from '../country/city/city.dao.js';
+import { CinemaDao } from '../cinema/cinema.dao.js';
 
 @Injectable()
 export class UserService {
@@ -19,7 +22,9 @@ export class UserService {
   constructor(
     private readonly userDao: UserDao,
     private readonly bcrypt: Bcrypt,
-    private readonly password: Password
+    private readonly password: Password,
+    private readonly cityDao: CityDao,
+    private readonly cinemaDao: CinemaDao,
   ) {}
 
   findAll(): Promise<User[]> {
@@ -123,22 +128,36 @@ export class UserService {
       confirmPassword: _confirmPassword,
       role: _role,
       password,
-      cityId,
       ...rest
     } = dto;
 
-    // cityId entra por separado para poder distinguir "no vine" de "vine en
-    // null". Con el spread directo seria imposible.
-    const data: Partial<User> = {
-      ...rest,
-      ...(cityId !== undefined ? { cityId } : {}),
-    };
+    const data: Partial<User> = { ...rest };
 
     if (password) {
       data.password = await this.bcrypt.hashPassword(password, this.saltRounds);
     }
 
     const updated = await this.userDao.update(id, data);
+    return updated ?? user;
+  }
+
+  /**
+   * HU-002: fija la ciudad del usuario. Es la única vía para cambiarla
+   * (`UpdateUserDto` no acepta `cityId`), así RN-006 no se puede saltar.
+   */
+  async setLocation(userId: number, cityId: number): Promise<User> {
+    const user = await this.findOne(userId);
+
+    const city = await this.cityDao.findById(cityId);
+    if (!city) throw new NotFoundException('Ciudad no encontrada');
+    if (!city.isActive) throw new UnprocessableEntityException('La ciudad está inactiva');
+
+    // RN-006: solo se puede elegir una ciudad con al menos un cine activo.
+    if ((await this.cinemaDao.countActiveByCityId(cityId)) === 0) {
+      throw new UnprocessableEntityException('La ciudad no tiene cines activos');
+    }
+
+    const updated = await this.userDao.update(userId, { cityId });
     return updated ?? user;
   }
 

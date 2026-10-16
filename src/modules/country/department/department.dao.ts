@@ -16,6 +16,10 @@ export class DepartmentDao{
         return this.repo.save(department)
     }
 
+    async findByCountryId(countryId: number): Promise<Department[]>{
+        return this.repo.find({where: {country: {id: countryId}}})
+    }
+
     async findById(id: number): Promise<Department | null>{
         return this.repo.findOne({where: {id}})
     }

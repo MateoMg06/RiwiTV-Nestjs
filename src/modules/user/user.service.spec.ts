@@ -1,7 +1,14 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
 import { UserService } from './user.service.js';
 import type { UserDao } from './user.dao.js';
+import type { CityDao } from '../country/city/city.dao.js';
+import type { CinemaDao } from '../cinema/cinema.dao.js';
 import type { CreateUserDto } from './create-user.dto.js';
 import type { UpdateUserDto } from './update-user.dto.js';
 import type { User } from './user.entity.js';
@@ -48,6 +55,8 @@ const buildCreateDto = (overrides: Partial<CreateUserDto> = {}): CreateUserDto =
 
 describe('UserService', () => {
   let userDao: UserDao;
+  let cityDao: CityDao;
+  let cinemaDao: CinemaDao;
   let bcrypt: Bcrypt;
   let service: UserService;
 
@@ -64,8 +73,11 @@ describe('UserService', () => {
       delete: vi.fn(),
     } as unknown as UserDao;
 
+    cityDao = { findById: vi.fn() } as unknown as CityDao;
+    cinemaDao = { countActiveByCityId: vi.fn() } as unknown as CinemaDao;
+
     bcrypt = new Bcrypt();
-    service = new UserService(userDao, bcrypt, new Password());
+    service = new UserService(userDao, bcrypt, new Password(), cityDao, cinemaDao);
   });
 
   afterEach(() => {
@@ -158,7 +170,7 @@ describe('UserService', () => {
 
     it('respeta SALT_ROUNDS del entorno', async () => {
       vi.stubEnv('SALT_ROUNDS', '4');
-      const cheap = new UserService(userDao, new Bcrypt(), new Password());
+      const cheap = new UserService(userDao, new Bcrypt(), new Password(), cityDao, cinemaDao);
       (userDao.create as ReturnType<typeof vi.fn>).mockResolvedValue(buildUser());
 
       await cheap.create(buildCreateDto());
@@ -260,22 +272,15 @@ describe('UserService', () => {
       );
     });
 
-    it('distingue "no vine cityId" de "vine en null"', async () => {
+    it('no toca cityId al actualizar (la ciudad solo cambia por setLocation)', async () => {
       (userDao.findById as ReturnType<typeof vi.fn>).mockResolvedValue(buildUser());
       (userDao.update as ReturnType<typeof vi.fn>).mockResolvedValue(buildUser());
 
       await service.update(1, { name: 'Ana' });
+
       expect((userDao.update as ReturnType<typeof vi.fn>).mock.calls[0][1]).not.toHaveProperty(
         'cityId',
       );
-
-      (userDao.update as ReturnType<typeof vi.fn>).mockClear();
-
-      // El DTO tipa cityId como number, no number|null: hoy la API no puede
-      // desvincular a un usuario de su ciudad, solo asignarla. Se proyecta el
-      // null para fijar el comportamiento real del servicio.
-      await service.update(1, { cityId: null } as unknown as UpdateUserDto);
-      expect((userDao.update as ReturnType<typeof vi.fn>).mock.calls[0][1].cityId).toBeNull();
     });
 
     it('devuelve el estado previo si el DAO no devuelve nada', async () => {
@@ -284,6 +289,73 @@ describe('UserService', () => {
       (userDao.update as ReturnType<typeof vi.fn>).mockResolvedValue(null);
 
       await expect(service.update(1, { name: 'X' })).resolves.toBe(user);
+    });
+  });
+
+  describe('setLocation (HU-002)', () => {
+    const mock = (fn: unknown) => fn as ReturnType<typeof vi.fn>;
+
+    beforeEach(() => {
+      mock(userDao.findById).mockResolvedValue(buildUser());
+      mock(cityDao.findById).mockResolvedValue({ id: 5, isActive: true });
+      mock(cinemaDao.countActiveByCityId).mockResolvedValue(1);
+    });
+
+    it('guarda la ciudad y devuelve el usuario actualizado', async () => {
+      const updated = buildUser({ cityId: 5 });
+      mock(userDao.update).mockResolvedValue(updated);
+
+      await expect(service.setLocation(1, 5)).resolves.toBe(updated);
+      expect(userDao.update).toHaveBeenCalledWith(1, { cityId: 5 });
+      expect(cinemaDao.countActiveByCityId).toHaveBeenCalledWith(5);
+    });
+
+    it('404 si el usuario no existe y no consulta la ciudad', async () => {
+      mock(userDao.findById).mockResolvedValue(null);
+
+      await expect(service.setLocation(1, 5)).rejects.toThrow(
+        new NotFoundException('Usuario no encontrado'),
+      );
+      expect(cityDao.findById).not.toHaveBeenCalled();
+    });
+
+    it('404 si la ciudad no existe', async () => {
+      mock(cityDao.findById).mockResolvedValue(null);
+
+      await expect(service.setLocation(1, 5)).rejects.toThrow(
+        new NotFoundException('Ciudad no encontrada'),
+      );
+      expect(userDao.update).not.toHaveBeenCalled();
+    });
+
+    it('422 si la ciudad está inactiva y no consulta cines', async () => {
+      mock(cityDao.findById).mockResolvedValue({ id: 5, isActive: false });
+
+      const result = service.setLocation(1, 5);
+      await expect(result).rejects.toBeInstanceOf(UnprocessableEntityException);
+      await expect(result).rejects.toThrow('La ciudad está inactiva');
+      expect(cinemaDao.countActiveByCityId).not.toHaveBeenCalled();
+    });
+
+    it('422 si la ciudad no tiene cines activos (RN-006) y no actualiza', async () => {
+      mock(cinemaDao.countActiveByCityId).mockResolvedValue(0);
+
+      const result = service.setLocation(1, 5);
+      await expect(result).rejects.toBeInstanceOf(UnprocessableEntityException);
+      await expect(result).rejects.toThrow('La ciudad no tiene cines activos');
+      expect(userDao.update).not.toHaveBeenCalled();
+    });
+
+    it('permite cambiar de ciudad dos veces', async () => {
+      mock(userDao.update).mockResolvedValue(buildUser());
+
+      await service.setLocation(1, 5);
+      await service.setLocation(1, 6);
+
+      expect(mock(userDao.update).mock.calls).toEqual([
+        [1, { cityId: 5 }],
+        [1, { cityId: 6 }],
+      ]);
     });
   });
 });
