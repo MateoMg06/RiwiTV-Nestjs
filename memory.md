@@ -1,0 +1,61 @@
+# memory.md — RiwiTV NestJS
+
+> Memoria de trabajo del proyecto. **Se actualiza con cada cambio** (ver `agent.md`, sección 0).
+> Rama: `feature/authentication` · Último commit revisado: `ca1a330` (feat: password validator and captcha applied).
+
+## Estado actual
+
+| Área | Estado | Notas |
+|---|---|---|
+| Auth: captcha | Implementado, con bug | Devuelve la respuesta al cliente (ver Bugs #1) |
+| Auth: registro + activación | Implementado | Cuenta nace INACTIVA; token 24 h; sin envío de correo aún (nodemailer instalado, no usado) |
+| Auth: login | Implementado | Bloqueo 15 min tras `MAX_FAILED_ATTEMPTS`; hash ficticio anti-enumeración |
+| Auth: refresh con rotación | Implementado, con bug | Cookie `refresh_token` con path incorrecto (Bugs #2) |
+| Auth: logout / logout-all / me | Implementado | `revokeAllSessions` filtra mal (Bugs #3) |
+| Usuarios: CRUD | Parcial | Falta control de propiedad y alinear contrato con la API original |
+| Rutas heredadas `/api/users/auth`, `/api/users/legacy-login` | No migradas | Pendiente confirmar si algún cliente las usa |
+| Migraciones / seeders | No existen | `synchronize: true` |
+| Swagger | Básico | Sin metadatos ni `@ApiProperty` |
+
+## Decisiones
+
+- Sesiones en tabla `Sessions` (N por usuario), refresh token guardado como SHA-256.
+- Refresh firmado con secreto distinto al access; refresh sin rol ni email.
+- El rol nunca se acepta del cliente en `UserService.create/update`; registro público usa `RegisterDto` sin `role`.
+- `cityId` numérico en lugar de nombre de ciudad en el usuario.
+- Teléfono y documento como `string`.
+
+## Pendientes (alcance de esta rama: U.1–U.3 de INSTRUCTIONS.md)
+
+- [ ] Comparar endpoints antiguos de usuarios con `/user` y `/auth` y documentar diferencias de contrato.
+- [ ] Decidir sobre `/api/users/auth` y `/api/users/legacy-login` (¿algún cliente las usa?).
+- [ ] Verificar equivalencia de respuestas de creación, listado, actualización y validaciones.
+- [ ] Autorización: un `usuario` solo puede ver/editar/borrar su propia cuenta; admin conserva permisos.
+- [ ] Revisar flujo completo: registro → activación → login → refresh → logout → me.
+- [ ] Mantener rutas de compatibilidad si el frontend aún las necesita.
+
+## Bugs conocidos
+
+1. [ ] `GET /auth/captcha` expone `answer` — `src/modules/auth/auth.controller.ts`, `src/common/utils/captcha.ts`.
+2. [ ] Cookie `refresh_token` con `path: '/auth'` pero la ruta real es `/api/auth` — `auth.controller.ts`.
+3. [ ] `revokedAt: undefined` no filtra en TypeORM; usar `IsNull()` — `src/modules/auth/auth.dao.ts`.
+4. [ ] `__dirname` en ESM — `src/config/config.service.ts`.
+5. [ ] `.env` no se carga en `process.env` pero varios módulos lo leen de ahí — `database.ts`, `cors.ts`, `auth.service.ts`, `user.service.ts`.
+6. [ ] `/user/:id` sin control de propiedad; `POST /user` sin `@Roles`; `+id` sin `ParseIntPipe` — `src/modules/user/user.controller.ts`.
+7. [ ] Política de contraseña inconsistente (DTO 8–72 vs validador ≥10 + complejidad).
+8. [ ] `AuthPayload` declara `name`/`membership` que el token no trae.
+9. [ ] Credenciales de ejemplo de ObserveModule en `app.module.ts`; nombres de variables inconsistentes en `.env.example`.
+10. [ ] Captcha en memoria (no escala; limpieza nunca se ejecuta).
+11. [ ] Sin migraciones (`synchronize: true`).
+12. [ ] Swagger con datos de relleno y puerto 3000 fijo en el log.
+13. [ ] `tsconfig.build.tsbuildinfo` versionado.
+
+## Registro de cambios
+
+### 2026-10-15 — docs: crear agent.md y memory.md
+- **Archivos:** `agent.md`, `memory.md`
+- **Qué:** guía para agentes de IA y memoria inicial con estado, decisiones, pendientes y bugs detectados en la revisión de `feature/authentication`.
+- **Por qué:** dar contexto persistente a los agentes y obligar a registrar cada cambio.
+- **Impacto:** ninguno en código.
+- **Verificación:** no aplica (solo documentación).
+- **Pendiente derivado:** resolver los bugs listados, uno por cambio.
