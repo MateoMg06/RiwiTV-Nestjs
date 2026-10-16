@@ -63,6 +63,10 @@ export class User {
   @Column({ type: 'int', nullable: true })
   favoriteCinemaId: number | null;
 
+  /** URL https de la foto de perfil (HU-008, opcional). No hay subida de archivos. */
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  photoUrl: string | null;
+
   @Column({ default: false })
   acceptsDataProcessing: boolean;
 

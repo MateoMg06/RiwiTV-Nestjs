@@ -14,6 +14,7 @@ import { AuthGuard } from './common/guards/auth.guard.js';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter.js';
 import { AuthModule } from './modules/auth/auth.module.js';
 import { UserModule } from './modules/user/user.module.js';
+import { ProfileModule } from './modules/profile/profile.module.js';
 import { HealthModule } from './modules/health/health.module.js';
 
 export const { ObserveModule, ObserveInstrument } = createObserveModule();
@@ -30,6 +31,7 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
     CountryModule,
     UserModule,
     AuthModule,
+    ProfileModule,
     HealthModule,
     UtilsModule,
     ConfigModule,

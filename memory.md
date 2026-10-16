@@ -159,6 +159,14 @@ No se implementa (no pertenece a HU-001 a HU-010):
 
 ## Registro de cambios
 
+### 2026-10-16 — feat(HU-008): `GET /profile` (paso 4 de 6)
+- **Archivos:** `src/modules/profile/{profile.controller,profile.service,profile.module}.ts` (+specs de service y controller), `src/modules/user/user.entity.ts`, `src/app.module.ts`, `memory.md`.
+- **Qué:** módulo nuevo `profile` (importa `UserModule` y `MembershipModule`, sin ciclos). `GET /profile` (JWT) → `{ id, name, lastName, email, phone, documentType, documentNumber, birthDate, gender, cityId, favoriteCinemaId, photoUrl, preferences: { acceptsNotifications }, membership: { code, level, status } | null, purchaseHistory: [], activeReservations: [] }`. 401 sin token, 404 usuario inexistente. Proyección campo a campo: nunca password, role, accountStatus, tokens, lockedUntil ni failedLoginAttempts. `User.photoUrl` varchar(500) nullable.
+- **Por qué:** HU-008 (perfil con foto opcional, nivel, historial de compras y reservas activas).
+- **Impacto:** endpoint nuevo; columna `Users.photoUrl` (la crea `synchronize`). `purchaseHistory` y `activeReservations` son `[]` **provisionales**: no existen tablas de compras ni reservas (las reservas son HU-010; compras, fuera de alcance).
+- **Verificación:** `npm run test` ✅ (380/380) · `npm run lint` ✅ · `npm run build` ✅.
+- **Pendiente derivado:** pasos 5 y 6; poblar `purchaseHistory`/`activeReservations` cuando existan sus fuentes.
+
 ### 2026-10-16 — feat(HU-008): login con beneficios reales (paso 3 de 6)
 - **Archivos:** `src/modules/auth/auth.service.ts`, `src/modules/auth/interfaces/auth-response.interface.ts` (+ specs de service y controller), `memory.md`.
 - **Qué:** `LoginResponse.membership` → `{ code, status, level } | null` y `benefits: Benefit[]` calculado con `benefitsFor(level)` (el mismo que `/membership/benefits`); sin membresía, `[]`.
