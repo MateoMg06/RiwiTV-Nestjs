@@ -67,11 +67,36 @@ Todo: código, DTOs, entidades, tests, configuración, `.env.example`, dependenc
 
 - **Qué es:** API de RiwiTV (cartelera de cines: películas, cines, funciones, ubicación geográfica, usuarios). Se está **migrando de Node/Express + Sequelize a NestJS + TypeORM**.
 - **Rama de trabajo:** `feature/authentication` (la "rama auth"). Rama base de integración: `develop`. Remoto: `github.com/MateoMg06/RiwiTV-Nestjs`.
-- **Alcance de esta rama:** **solo usuarios y autenticación** (secciones U.1, U.2 y U.3 de `INSTRUCTIONS.md`). Películas, cines, funciones y ubicación pertenecen a otras ramas (`feature/movie-module`, etc.).
+- **Alcance de esta rama:** **solo usuarios y autenticación**: secciones U.1, U.2 y U.3 de `INSTRUCTIONS.md` **más** las piezas de auth que existen en `origin/main` del original (forgot/reset password, email de activación, auditoría de acceso, `/users/location`; ver 1.1 y 1.2). Películas, cines, funciones, ubicación, reservas, perfil, membresía y notificaciones pertenecen a otras ramas.
   - Puedes tocar lógica de negocio adyacente **solo** si es necesario para que usuarios/auth funcionen, y nada más allá (regla explícita de `INSTRUCTIONS.md`).
 - **Entregable de la rama:** módulo de usuarios y autenticación funcional y compatible con el proyecto original y su frontend.
 
 `INSTRUCTIONS.md` es la fuente de verdad del alcance. Si hay conflicto entre este archivo e `INSTRUCTIONS.md`, manda `INSTRUCTIONS.md`; regístralo en `memory.md`.
+
+### 1.1 Proyecto origen (lo que se migra)
+
+- **Repo original (Express + Sequelize):** `https://github.com/MateoMg06/RIWI-TV-PUBLIC.git`. Código en `app/src/` (`routes/`, `controllers/`, `services/`, `repositories/`, `models/`, `middlewares/`, `migrations/`, `seeders/`, `docs/postman/`).
+- **Repo destino (este):** `https://github.com/MateoMg06/RiwiTV-Nestjs.git`.
+- Para consultar el original, clónalo **fuera** de este repo (p. ej. `../RIWI-TV-PUBLIC`) y léelo con `git show origin/<rama>:app/src/<ruta>`. Nunca copies archivos de Sequelize tal cual: se reescriben con TypeORM y el patrón de la sección 3.
+
+> ⚠️ **`develop` y `main` del original NO son iguales.** `INSTRUCTIONS.md` se escribió mirando `develop`, que solo tiene usuarios, películas, cines, funciones y ubicación. **`main` es más completo** y además tiene: `auth.routes` (forgot/reset password, verify-email), `profile`, `membership`, `reservation` (bloqueo de butacas + job de limpieza), `notification`, `location`, `email.service`, y los modelos `Seat`, `SeatLock`, `Membership`, `Profile`, `PurchaseHistory`, `ReleaseNotification`, `AccessAudit`, `PasswordResetToken`, `RefreshToken`.
+> **Referencia por defecto: `origin/main` del original.** Si una tarea depende de la diferencia entre ramas, anótalo en `memory.md` como decisión.
+
+### 1.2 Hoja de ruta global de la migración (contexto; solo la parte de auth es de esta rama)
+
+| # | Bloque | Rama donde corresponde |
+|---|---|---|
+| 1 | Corregir bugs base (ConfigService ESM, cookie refresh, Observe) | **esta rama** |
+| 2 | Country / Department / City (+ `GET /cities/:id/cinemas`) | otra rama |
+| 3 | Movie (partir de `origin/feature/movie-module` del repo Nest) | otra rama |
+| 4 | Cinema, Showtime (`/functions`), Seat | otra rama |
+| 5 | Reservation (`lock-seats`, `release-seats`, `summary`) + job de limpieza (`@nestjs/schedule`) | otra rama |
+| 6 | Membership y Profile | otra rama |
+| 7 | Forgot/reset password, email (nodemailer), auditoría de acceso, `/users/location` | **esta rama** |
+| 8 | Notification y Health (`/api/v1/health`) | otra rama |
+| 9 | Seeders, migraciones TypeORM, Docker, Postman, tests | compartido (coordinar) |
+
+> ⚠️ **No hagas merge de `origin/feature/controller` ni `origin/feature/movie-module` del repo Nest en esta rama.** Usan otra estructura (`src/country/...` en vez de `src/modules/...`) y su diff **borra `auth` y `user`**. Si necesitas algo de ahí, trae los archivos a mano (`git show origin/<rama>:<ruta>`), adáptalos y regístralo en `memory.md`.
 
 ---
 
@@ -184,9 +209,31 @@ src/
 | `POST /api/users/refresh` | `POST /api/auth/refresh` |
 | `POST /api/users/logout` | `POST /api/auth/logout` |
 | `PUT /api/users/:id` | `PATCH /api/user/:id` |
+| `POST /api/users/register`, `GET /api/users/getUsers` (alias) | **No migradas** |
+| `POST`/`PUT /api/users/location` (asignar `cityId` al usuario autenticado) | **No migrada** |
 | `/api/users/auth`, `/api/users/legacy-login` | **No migradas.** Confirmar si algún cliente las usa antes de descartarlas |
+| `POST /api/auth/verify-email`, `GET /api/auth/activate`, `GET /api/auth/verify-email` (alias de activar) | **No migradas** (solo existe `POST /api/auth/activate`) |
+| `POST /api/auth/forgot-password`, `POST /api/auth/reset-password` | **No migradas** |
 
-Si añades rutas de compatibilidad, documenta en `memory.md` qué cliente las necesita y por qué.
+El original además montaba las mismas rutas con prefijos `/api/v1/...` y sin prefijo (`/auth`, `/profile`…). Nest solo atiende en `/api`. Decidir con el frontend si se versiona o si el frontend se adapta.
+
+### Diferencias de contrato con el original (verificadas en `origin/main`)
+
+| Aspecto | Original (Express) | NestJS actual |
+|---|---|---|
+| Cookie del access token | `accessToken` | `access_token` |
+| Formato de error | `{ error: "mensaje" }` | `{ statusCode, message, path, timestamp }` |
+| Código de `login` / `refresh` | `201` | `200` |
+| Respuesta de `register` | `{ message, userId }` | `{ user, activationToken? }` |
+| `register` crea además | `Profile` + `Membership` (estado `pending`) y envía correo de activación | solo `User`; el token se escribe en el log |
+| Teléfono | exactamente 10 dígitos | `^\+?[0-9]{7,15}$` |
+| Ciudad en el alta | `city` (texto) | `cityId` (número) |
+| Activación ya hecha | `400 "La cuenta ya está activada"` | no se distingue |
+| Auditoría | `AccessAudit` en login, login_failed, refresh, logout, password_reset_requested, password_reset, account_activated | no existe |
+| Recuperación de contraseña | `PasswordResetToken` (`token`, `expiresAt`, `used`) | no existe |
+| Ruta del recurso usuario | `/api/users` | `/api/user` |
+
+Antes de cambiar cualquiera de estas diferencias, decide (y registra en `memory.md`) si se **conserva el contrato original** por compatibilidad con el frontend o si se **mantiene el de Nest** y se avisa al frontend. Si añades rutas de compatibilidad, documenta qué cliente las necesita y por qué.
 
 ---
 
@@ -210,6 +257,8 @@ Encontrados al revisar `feature/authentication` (commit `ca1a330`). Cópialos a 
 11. **BD:** `synchronize: true` y no existe carpeta `src/migrations`. `INSTRUCTIONS.md` pide migración inicial que cree la BD desde cero (es de la sección 5; coordinar antes de abordarlo).
 12. **Swagger:** título/versión de relleno, log con puerto 3000 fijo, DTOs sin `@ApiProperty`.
 13. `tsconfig.build.tsbuildinfo` está versionado; debería ir en `.gitignore`.
+14. **`.env.example` contiene secretos que parecen reales** (`JWT_SECRET`, `JWT_REFRESH_SECRET`, claves de Observe, `SEED_API_KEY`). Sustituirlos por valores de ejemplo y **rotarlos** si alguna vez se usaron.
+15. **Email no implementado:** `nodemailer` está instalado y `.env.example` tiene `SMTP_*`, pero no hay servicio de correo; la activación solo se registra en el log.
 
 No corrijas todo de golpe en un solo commit: un problema ⇒ un cambio ⇒ una entrada en `memory.md`.
 
