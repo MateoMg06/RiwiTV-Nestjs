@@ -24,6 +24,28 @@ export enum ShowFormat {
   DOS_D = '2D',
   TRES_D = '3D',
   IMAX = 'IMAX',
+  VIP = 'VIP',
+}
+
+/** Estado de una funcion. Solo `CANCELLED` se oculta de la cartelera. */
+export enum ShowtimeStatus {
+  ACTIVE = 'ACTIVE',
+  SOLD_OUT = 'SOLD_OUT',
+  CANCELLED = 'CANCELLED',
+}
+
+/** Estado de una pelicula en el catalogo. */
+export enum MovieStatus {
+  UPCOMING = 'UPCOMING',
+  ACTIVE = 'ACTIVE',
+  INACTIVE = 'INACTIVE',
+}
+
+/** Audio de una funcion. */
+export enum AudioType {
+  DUBBED = 'DUBBED',
+  SUBTITLED = 'SUBTITLED',
+  ORIGINAL = 'ORIGINAL',
 }
 
 /** Clasificacion por edad. Determina si una funcion es apta para menores. */

@@ -10,6 +10,9 @@ import { User } from './modules/user/user.entity.js';
 import { UserModule } from './modules/user/user.module.js';
 import { Session } from './modules/auth/entities/session.entity.js';
 import { Cinema } from './modules/cinema/cinema.entity.js';
+import { Movie } from './modules/movie/movie.entity.js';
+import { MovieModule } from './modules/movie/movie.module.js';
+import { Showtime } from './modules/showtime/showtime.entity.js';
 
 /** Opciones de conexión, compartidas por la app y por `seeders/seed.ts`. */
 export const typeOrmOptions: DataSourceOptions = {
@@ -19,12 +22,12 @@ export const typeOrmOptions: DataSourceOptions = {
   username: process.env.POSTGRES_USER,
   password: process.env.POSTGRES_PASSWORD,
   database: process.env.POSTGRES_DB ?? process.env.DB_CONTAINER_NAME,
-  entities: [Country, City, Department, User, Session, Cinema],
+  entities: [Country, City, Department, User, Session, Cinema, Movie, Showtime],
   synchronize: true,
   migrations: [`${path.dirname(__filename)}/migrations/*{.ts,.js}`],
 };
 
 @Module({
-  imports: [TypeOrmModule.forRoot(typeOrmOptions), CountryModule, UserModule],
+  imports: [TypeOrmModule.forRoot(typeOrmOptions), CountryModule, UserModule, MovieModule],
 })
 export class DatabaseModule {}

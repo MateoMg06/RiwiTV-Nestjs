@@ -10,7 +10,7 @@
 |---|---|---|---|
 | HU-001 | Parcial | Capas, `.env` obligatorio, Docker Compose, Swagger, logger, Vitest, oxlint, Prettier, Helmet, CORS, `GET /api/v1/health` | Migraciones automáticas al arrancar (hoy `synchronize: true`), ambientes Dev/QA/Prod |
 | HU-002 | Completa salvo prueba manual | Entidades; `GET /countries`, `/departments/:countryId`, `/cities/:departmentId` (públicas, ciudades solo activas); `POST /users/location` (JWT) con RN-006; entidad `Cinema` mínima; `npm run seed` | Prueba manual contra Postgres (seed + `POST /api/users/location`) |
-| HU-003 | No iniciada | — | Movie, Showtime, Cinema (lectura); cartelera de 7 días y de hoy, solo funciones activas; filtros fecha, género, clasificación, idioma, tipo de sala, formato, complejo y "Disponible" (base en `origin/feature/movie-module`) |
+| HU-003 | Parcial (paso 2 de 5) | Entidades `Movie` y `Showtime` (columnas de cartelera); `GET /movies`, `/movies/weekly` y `/movies/today` (públicos, `cityId` opcional, 7 días, RN-012); seed con películas y funciones | Pasos 3–5: filtros (fecha, género, clasificación, idioma, tipo de sala, formato, complejo, "Disponible" RN-011), tipo de sala, prueba manual |
 | HU-004 | No iniciada | — | Detalle completo (incluye precio por formato y calificación promedio), funciones futuras de la ciudad, recomendaciones |
 | HU-005 | No iniciada | — | Próximos estrenos ordenados por fecha, contador regresivo, `ReleaseNotification` sin duplicados (RN-019), correo al pasar a "En Cartelera" (RN-020) |
 | HU-006 | Parcial | Captcha, registro, BCrypt, validador de contraseña (≥10 + complejidad), activación por token 24 h | Crear perfil, membresía **Activa** con código único, historial vacío, billetera vacía y preferencias; correo de activación (SMTP); `POST /auth/verify-email`; `POST /membership/create`; DTO con mínimo 10 |
@@ -47,6 +47,14 @@
 - HU-002: `cityId` solo cambia por `/users/location`. `UpdateUserDto` ya no lo acepta (`PATCH /user/:id` con `cityId` da 400) para no saltarse RN-006. El alta/registro sigue aceptándolo (no se cambió).
 - HU-002: tabla `Cinemas` con `name`, `isActive` y `city` (estilo Nest, no `active`/`cityId` del original). Solo `CinemaDao.countActiveByCityId`; sin service ni controller.
 - HU-002: seed mínimo `src/seeders/seed.ts`, idempotente (busca por nombre). Crea Colombia, Antioquia, Medellín (activa, con cine «Multicine Riwi Centro»), Envigado (activa, sin cines) y Bello (inactiva). Ejecutar: `npm run build && npm run seed` (en Docker: `docker compose exec app npm run seed`). Reutiliza `typeOrmOptions` exportado de `src/database.ts`. (HU-003 lo amplía: ver abajo.)
+- HU-003: las funciones `SOLD_OUT` **sí** salen en la cartelera; solo se excluyen las `CANCELLED`. Desviación consciente del original, que filtraba `status = ACTIVE`. El filtro "Disponible" (RN-011, paso 5) las quitará.
+- HU-003: `classification` usa el enum `AgeRating` existente (`todos`, `12+`, `16+`, `18+`). `status`, `audioType` y formatos usan los valores del original (`ACTIVE`/`SOLD_OUT`/`CANCELLED`; `UPCOMING`/`ACTIVE`/`INACTIVE`; `DUBBED`/`SUBTITLED`/`ORIGINAL`; `2D`/`3D`/`IMAX`/`VIP`).
+- HU-003: la zona horaria es `TZ=America/Bogota`; define «hoy» y los 7 días (`from` = ahora, `to` = fin del día +6, RN-012). Node la aplica también si se asigna a `process.env.TZ` en runtime (verificado en Node 24 con `node -e`), así que vale con que `load-env.ts` cargue el `.env`; en Docker llega por `env_file`.
+- HU-003: `cityId` es opcional como en el original; sin él se devuelven todas las ciudades. `formats` (formatos distintos por película) es un campo derivado añadido; no existe en el original. Nombres de campo del original donde coinciden (`id, name, genre, classification, duration, director, posterUrl, releaseDate, status, audienceRating` numérico); el original además devuelve `synopsis`, `cast`, `bannerUrl` y `trailerUrl` (HU-004, aún no existen) y `showtimes` crudos; aquí cada función va con `{ id, startsAt, format, language, audioType, status, cinema: { id, name } }`.
+- HU-003: RN-013 sin caché: cada petición consulta la BD.
+- HU-003: «hoy» = de ahora al fin del día (23:59:59.999 en `TZ`). Desviación consciente del original, que usa el inicio del día y muestra funciones ya iniciadas. Decisión de la persona.
+- HU-003: las rutas fijas de `/movies` (`weekly`, luego `today`, `filter`) deben declararse antes de `:id` (HU-004).
+- HU-003: seed ampliado: Itagüí (activa) con «Multicine Riwi Sur», «Multicine Riwi Cerrado» (inactivo) en Medellín, 6 películas (4 `ACTIVE`, 1 `UPCOMING`, 1 `INACTIVE`) y 13 funciones relativas a hoy (incluidas: hoy 23:00, +1, +3, +6, una `SOLD_OUT`, 2 en Itagüí; excluidas: +7, ayer, `CANCELLED`, película próxima, película inactiva, cine inactivo).
 
 ## Pendientes
 
@@ -61,7 +69,10 @@ Por historia:
 - [x] HU-002 paso 1: lecturas de ubicación.
 - [x] HU-002 paso 2: `POST /users/location` con Cinema mínima y RN-006 al guardar.
 - [ ] HU-002: prueba manual contra Postgres (seed + login + `POST /api/users/location`: 200, 404, 422 inactiva, 422 sin cines).
-- [ ] HU-003: módulo Movie + Showtime + Cinema (lectura); cartelera de 7 días y de hoy; filtros (incluye "Disponible", RN-011).
+- [x] HU-003 paso 1: entidades `Movie`/`Showtime`, `GET /movies` y `/movies/weekly`, seed.
+- [x] HU-003 paso 2: `GET /movies/today`.
+- [ ] HU-003 pasos 3–5: filtros (fecha, género, clasificación, idioma, tipo de sala, formato, complejo) y "Disponible" (RN-011, quita `SOLD_OUT`); tipo de sala necesita columna en `Showtime`.
+- [ ] HU-003: prueba manual contra Postgres (seed + `GET /api/movies/weekly?cityId=`); añadir `TZ=America/Bogota` al `.env` local (ya está en `.env.example`).
 - [ ] HU-004: detalle completo con precio por formato; funciones futuras de la ciudad; recomendaciones.
 - [ ] HU-005: próximos estrenos; `POST /notifications/upcoming` sin duplicados; correo al pasar a "En Cartelera".
 - [ ] HU-006: `register` crea `Profile`, `Membership` **Activa** con código único, historial vacío, billetera vacía y preferencias; correo de activación (nodemailer); `POST /auth/verify-email`; `POST /membership/create`; `CreateUserDto` con mínimo 10 caracteres.
@@ -98,13 +109,45 @@ No se implementa (no pertenece a HU-001 a HU-010):
 11. [ ] Sin migraciones (`synchronize: true`).
 12. [ ] Swagger con datos de relleno y puerto 3000 fijo en el log.
 13. [ ] `tsconfig.build.tsbuildinfo` versionado.
-14. [ ] `.env.example` con secretos que parecen reales (JWT, Observe, `SEED_API_KEY`): reemplazar y rotar.
+14. [x] `.env.example` con secretos que parecen reales (JWT, Observe, `SEED_API_KEY`): reemplazar y rotar.
 15. [ ] Email no implementado (nodemailer instalado sin uso).
 16. [x] `agent.md` §2 y §4 dicen ESM / `import.meta.dirname`, pero desde `35c326d` el proyecto es CommonJS (`__dirname` es válido).
 17. [ ] HU-007 RN-030: el login no invalida el refresh token anterior; `Sessions` permite N sesiones simultáneas — `src/modules/auth/auth.service.ts`.
 18. [ ] HU-007: la respuesta de login no incluye membresía, beneficios ni datos del perfil — `src/modules/auth/auth.service.ts`.
 
 ## Registro de cambios
+
+### 2026-10-15 — chore(HU-003): restaurar `.env.example` con `TZ`
+- **Archivos:** `.env.example`
+- **Qué:** se restaura `.env.example` (la persona lo había renombrado a `.env`) con el mismo contenido limpio y se añade `TZ=America/Bogota` en la sección Aplicación.
+- **Por qué:** decisión de HU-003 (zona horaria de la cartelera); el pendiente de la entrada anterior.
+- **Impacto:** variable de entorno `TZ`. Hay que añadirla también al `.env` local.
+- **Verificación:** no aplica (solo configuración de ejemplo).
+- **Pendiente derivado:** ninguno.
+
+### 2026-10-15 — feat(HU-003): cartelera semanal `GET /movies` y `/movies/weekly` (paso 1 de 5)
+- **Archivos:** `src/common/enums/domain.enums.ts` (`ShowtimeStatus`, `MovieStatus`, `AudioType`, `ShowFormat.VIP`), `src/modules/movie/{movie.entity,movie.service,movie.controller,movie.module,catalog-query.dto}.ts` y specs de service y controller, `src/modules/showtime/{showtime.entity,showtime.dao,showtime.module}.ts` y `showtime.dao.spec.ts`, `src/database.ts`, `src/seeders/seed.ts`, `agent.md` (§5.1 fila HU-003/004/005).
+- **Qué:** endpoints públicos `GET /api/movies` y `GET /api/movies/weekly` (misma respuesta; `?cityId=` opcional, entero ≥ 1 o 400). Una sola consulta (QueryBuilder con join a película y cine): película `ACTIVE`, función no `CANCELLED`, cine activo, `startsAt` entre ahora y el fin del día +6, ordenado por nombre y hora. El service agrupa por película y añade `formats`. Tablas nuevas `Movies` y `Showtimes` (índice en `startsAt`) por `synchronize: true`.
+- **Por qué:** HU-003 (cartelera semanal, RN-012, RN-013).
+- **Impacto:** rutas nuevas sin token; nuevas tablas; `ShowFormat` gana `VIP` (sin otros usos en el código). Variable de entorno: `TZ=America/Bogota` (la lee Node, no `Config`); **no se pudo añadir a `.env.example` porque ese archivo está borrado en el working tree** (`D .env.example`, cambio de la persona): hay que añadir `TZ=America/Bogota` (sección Aplicación, «define "hoy" y los 7 días de la cartelera») al restaurarlo y al `.env` local. Sin `TZ` se usa la zona del sistema.
+- **Verificación:** `npm run test` ✅ (158/158, 19 nuevos) · `npm run lint` ✅ · `npm run build` ✅. Sin prueba manual: no hay Postgres levantado; el seed no se ejecutó.
+- **Pendiente derivado:** pasos 2–5 de HU-003; prueba manual; `TZ` en `.env.example`.
+
+### 2026-10-15 — feat(HU-003): cartelera de hoy `GET /movies/today` (paso 2 de 5)
+- **Archivos:** `src/modules/movie/{movie.service,movie.controller}.ts` y sus specs, `agent.md` (§5.1 fila HU-003/004/005), `memory.md`.
+- **Qué:** endpoint público `GET /api/movies/today` (`?cityId=` opcional). El service extrae la consulta y el agrupado a `getCatalog(from, to, cityId)`, compartido con `getWeekly` (comportamiento sin cambios); `getToday` usa de ahora a hoy 23:59:59.999. Declarado tras `weekly`.
+- **Por qué:** HU-003 (cartelera de hoy).
+- **Impacto:** ruta nueva sin token; sin cambios de BD ni variables de entorno.
+- **Verificación:** `npm run test` ✅ (164/164, 6 nuevos) · `npm run lint` ✅ · `npm run build` ✅. Sin prueba manual (sin Postgres).
+- **Pendiente derivado:** pasos 3–5 de HU-003; prueba manual.
+
+### 2026-10-15 — chore(HU-001): `.env.example` limpio
+- **Archivos:** `.env.example`
+- **Qué:** secretos sustituidos por `change-me` (JWT, Observe, Postgres). Solo quedan las variables que usa el código o `docker-compose.yml`; se añaden `CORS_ORIGIN`, `JWT_ACCESS_EXPIRES_IN` y `JWT_REFRESH_EXPIRES_IN`. Se quitan las que nada usa (`POSTGRES_TEST_DB`, `POSTGRES_QA_DB`, `POSTGRES_PROD_DB`, `OBSERVE_APP_NAME`, `APP_URL`, `SEED_API_KEY`, `SMTP_*`). `SMTP_*` y `RESET_TOKEN_EXPIRES_IN` vuelven cuando se implemente el correo (HU-006) y el reset (HU-007).
+- **Por qué:** bug #14; RN-002 (toda configuración por variables de entorno).
+- **Impacto:** variables de entorno. Si los secretos antiguos se usaron en algún entorno, hay que rotarlos.
+- **Verificación:** no aplica (solo configuración de ejemplo).
+- **Pendiente derivado:** rotar los secretos antiguos si se usaron.
 
 ### 2026-10-15 — feat(HU-002): `POST /users/location` con RN-006, Cinema mínima y seed (paso 2)
 - **Archivos:** `src/modules/cinema/{cinema.entity,cinema.dao,cinema.module,cinema.dao.spec}.ts` (nuevos), `src/modules/user/{set-location.dto,users-location.controller}.ts` y sus specs (nuevos), `src/modules/user/update-user.dto.spec.ts` (nuevo), `src/modules/user/user.service.ts`, `user.service.spec.ts`, `user.module.ts`, `update-user.dto.ts`, `src/database.ts`, `src/seeders/seed.ts` (nuevo), `package.json` (script `seed`), `agent.md` (§5.1 fila HU-002 `/users/location`).
