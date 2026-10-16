@@ -46,7 +46,7 @@ export enum MovieStatus {
   INACTIVE = 'INACTIVE',
 }
 
-/** Estado de una solicitud de aviso de estreno. `SENT` se añadirá con el envío del correo (RN-020). */
+/** Estado de una solicitud de aviso de estreno. `PENDING` al solicitar; el job horario de RN-020 la pasa a `SENT` tras enviar el correo. */
 export enum NotificationStatus {
   PENDING = 'PENDING',
   SENT = 'SENT',

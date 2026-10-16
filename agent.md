@@ -130,7 +130,7 @@ Si una tarea cae aquí, **no la hagas**: anótala en "Fuera de alcance" de `memo
 
 | Pieza | Versión / herramienta |
 |---|---|
-| Runtime | Node 20, **CommonJS** (`"type": "commonjs"`), TS `module: commonjs` |
+| Runtime | Node 22, **CommonJS** (`"type": "commonjs"`), TS `module: commonjs` |
 | Framework | NestJS (`@nestjs/core`, `platform-express`, `swagger`, `typeorm`, `observe`) |
 | BD | PostgreSQL vía TypeORM (`pg`) |
 | Validación | `class-validator` + `class-transformer` (ValidationPipe global) |

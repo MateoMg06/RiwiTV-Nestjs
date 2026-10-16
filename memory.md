@@ -152,11 +152,19 @@ No se implementa (no pertenece a HU-001 a HU-010):
 
 ## Registro de cambios
 
+### 2026-10-16 — chore(HU-001): imagen Node 22 y comentario de `NotificationStatus`
+- **Archivos:** `Dockerfile`, `agent.md` (§2: Node 22), `src/common/enums/domain.enums.ts`, `memory.md`.
+- **Qué:** `node:20-alpine` pasa a `node:22-alpine` en las dos etapas. El comentario de `NotificationStatus` describe el estado actual (el job de RN-020 pasa PENDING → SENT). Se corrige la nota de la entrada del job de RN-020 que decía que `node:20-alpine` «debe ser ≥ 20.19».
+- **Por qué:** NestJS 12, TypeORM y `@nestjs/schedule` son ESM y el proyecto CommonJS depende de `require(esm)` (Node ≥ 20.19); el tag flotante 20 no lo garantiza. Observación del revisor de HU-005.
+- **Impacto:** la imagen Docker usa Node 22. Sin cambios de comportamiento ni variables nuevas.
+- **Verificación:** `npm run test` ✅ (318/318) · `npm run lint` ✅ · `npm run build` ✅. Docker no se probó (imagen no construida).
+- **Pendiente derivado:** ninguno.
+
 ### 2026-10-16 — feat(HU-005): job horario que envía los avisos de estreno (RN-020, paso 4 de 5)
 - **Archivos:** `src/modules/notification/release-notification.job.ts`, `src/modules/notification/release-notification.job.spec.ts`, `src/modules/notification/notification.module.ts`, `src/modules/notification/notification.service.ts` (solo comentario), `src/app.module.ts`, `agent.md` (§5.1), `memory.md`.
 - **Qué:** `ReleaseNotificationJob.run()` con `@Cron(CronExpression.EVERY_HOUR, { name: 'release-notifications' })`: busca las solicitudes `PENDING` con película `ACTIVE`, envía el correo una a una y llama a `markSent`. Si una fila falla, registra el id y el mensaje (sin email) y sigue con las demás. Guardia `running` (try/finally) contra ejecuciones solapadas. `ScheduleModule.forRoot()` en `AppModule` (una sola vez); el job está en `NotificationModule.providers` (`MailService` llega de `UtilsModule` global). Se corrige el comentario de `NotificationService.requestUpcoming`.
 - **Por qué:** RN-020 / HU-005 (correo automático al pasar la película a "En Cartelera").
-- **Impacto:** el job corre al arrancar la app, cada hora en punto, en la zona horaria del proceso (`TZ=America/Bogota`, sin `timeZone` en el decorador). Sin endpoints ni variables nuevas. `@nestjs/schedule` es solo ESM y el proyecto compila a CommonJS: funciona porque Node ≥ 20.19 permite `require` de ESM (verificado con `require('./dist/app.module.js')` en Node 22; el Dockerfile usa `node:20-alpine`, que debe ser ≥ 20.19).
+- **Impacto:** el job corre al arrancar la app, cada hora en punto, en la zona horaria del proceso (`TZ=America/Bogota`, sin `timeZone` en el decorador). Sin endpoints ni variables nuevas. `@nestjs/schedule` es solo ESM y el proyecto compila a CommonJS: funciona porque Node ≥ 20.19 permite `require` de ESM (verificado con `require('./dist/app.module.js')` en Node 22; el Dockerfile usa `node:22-alpine`).
 - **Verificación:** `npm run test` ✅ (318/318) · `npm run lint` ✅ · `npm run build` ✅. Sin prueba manual (sin Postgres).
 - **Pendiente derivado:** prueba manual (ver Pendientes).
 
