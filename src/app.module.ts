@@ -16,6 +16,7 @@ import { AuthModule } from './modules/auth/auth.module.js';
 import { UserModule } from './modules/user/user.module.js';
 import { ProfileModule } from './modules/profile/profile.module.js';
 import { HealthModule } from './modules/health/health.module.js';
+import { ReservationModule } from './modules/reservation/reservation.module.js';
 
 export const { ObserveModule, ObserveInstrument } = createObserveModule();
 
@@ -33,6 +34,7 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
     AuthModule,
     ProfileModule,
     HealthModule,
+    ReservationModule,
     UtilsModule,
     ConfigModule,
   ],
