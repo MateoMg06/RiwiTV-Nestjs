@@ -263,7 +263,7 @@ El original montaba cada ruta con prefijo `/api`, `/api/v1` y sin prefijo. **Nes
 | HU-007 | `POST /api/auth/forgot-password`, `/reset-password` | `POST /api/auth/forgot-password` y `/reset-password` (públicos, 200) implementados |
 | HU-008 | `/api/profile`, `/api/membership`, `/benefits` | `GET`/`PUT /api/profile`, `GET /api/membership`, `GET /api/membership/benefits` (JWT) implementados; el cambio de correo queda en `pendingEmail` hasta verificarlo |
 | HU-009 | `GET /api/functions/:id`, `/prices` | Implementados (públicos). `/prices` devuelve el precio de lista; solo funciones futuras, no canceladas, de película y cine activos (404 si no) |
-| HU-010 | `GET /api/functions/:id/seats`, `/api/reservations/...` | **No existe** |
+| HU-010 | `GET /api/functions/:id/seats`, `/api/reservations/...` | `GET /api/functions/:id/seats` (público), `POST /api/reservations/lock-seats` (JWT, 200), `DELETE /api/reservations/release-seats` (JWT, cuerpo `{ functionId, seatIds? }`) y `GET /api/reservations/summary?functionId=` (JWT) implementados; bloqueo SERIALIZABLE de `SEAT_LOCK_MINUTES`, máximo por función, job de vencimiento cada minuto |
 
 ### 5.2 Autenticación (HU-006, HU-007) en Nest
 
@@ -277,7 +277,7 @@ El original montaba cada ruta con prefijo `/api`, `/api/v1` y sin prefijo. **Nes
 | Regla | Backlog | Nest hoy |
 |---|---|---|
 | HU-007 | El login devuelve también membresía, beneficios y datos del perfil | Devuelve `membership` (con `level`), `benefits` por nivel y `user` |
-| HU-010 | Máximo de sillas configurable **por función** | No existe (el original usaba `MAX_SEATS_PER_RESERVATION` global) |
+| HU-010 | Máximo de sillas configurable **por función** | `Showtimes.maxSeatsPerReservation` (nullable) con respaldo `MAX_SEATS_PER_RESERVATION` (resuelto) |
 
 ### 5.4 Diferencias de contrato con el original
 

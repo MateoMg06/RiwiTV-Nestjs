@@ -9,10 +9,13 @@ import { City } from '../modules/country/city/city.entity.js';
 import { Cinema } from '../modules/cinema/cinema.entity.js';
 import { Movie } from '../modules/movie/movie.entity.js';
 import { Showtime } from '../modules/showtime/showtime.entity.js';
+import { Seat } from '../modules/reservation/seat.entity.js';
 import {
   AgeRating,
   AudioType,
   MovieStatus,
+  SeatStatus,
+  SeatType,
   ShowFormat,
   ShowtimeStatus,
 } from '../common/enums/domain.enums.js';
@@ -62,6 +65,44 @@ function dayAt(days: number, hour: number, minutes = 0): Date {
   return date;
 }
 
+/**
+ * Plantilla de sala (HU-010): filas A–H de 10 sillas. Fila A columnas 9–10 preferenciales, fila H
+ * VIP (+5000). En funciones normales unas pocas `SOLD` y una `DISABLED`; en `SOLD_OUT`, todas `SOLD`.
+ */
+const SEAT_ROWS = 'ABCDEFGH'.split('');
+const SEATS_PER_ROW = 10;
+const SOLD_SEATS = ['B3', 'B4', 'C5', 'E7'];
+const DISABLED_SEATS = ['D1'];
+
+function seatTemplate(showtimeId: number, soldOut: boolean): Partial<Seat>[] {
+  return SEAT_ROWS.flatMap((row) =>
+    Array.from({ length: SEATS_PER_ROW }, (_, index) => {
+      const number = index + 1;
+      const label = `${row}${number}`;
+      const type =
+        row === 'H'
+          ? SeatType.VIP
+          : row === 'A' && number >= 9
+            ? SeatType.PREFERENCIAL
+            : SeatType.ESTANDAR;
+      const status =
+        soldOut || SOLD_SEATS.includes(label)
+          ? SeatStatus.SOLD
+          : DISABLED_SEATS.includes(label)
+            ? SeatStatus.DISABLED
+            : SeatStatus.AVAILABLE;
+      return {
+        showtimeId,
+        row,
+        number,
+        type,
+        status,
+        priceModifier: type === SeatType.VIP ? '5000.00' : '0.00',
+      };
+    }),
+  );
+}
+
 async function seed(): Promise<void> {
   const dataSource = await new DataSource(typeOrmOptions).initialize();
   try {
@@ -71,6 +112,7 @@ async function seed(): Promise<void> {
     const cinemas = dataSource.getRepository(Cinema);
     const movies = dataSource.getRepository(Movie);
     const showtimes = dataSource.getRepository(Showtime);
+    const seats = dataSource.getRepository(Seat);
 
     const country = await findOrCreate(
       countries,
@@ -314,6 +356,7 @@ async function seed(): Promise<void> {
         format: ShowFormat.IMAX,
         audioType: AudioType.ORIGINAL,
         status: ShowtimeStatus.ACTIVE,
+        maxSeatsPerReservation: 2, // Máximo propio de HU-010.
       },
       {
         movie: risas,
@@ -430,7 +473,7 @@ async function seed(): Promise<void> {
       },
     ];
     for (const data of showtimeData) {
-      await findOrCreate(
+      const showtime = await findOrCreate(
         showtimes,
         `función ${data.movie.name} en ${data.cinema.name} (${data.startsAt.toISOString()}, ${data.status})`,
         {
@@ -443,8 +486,21 @@ async function seed(): Promise<void> {
           language: data.language ?? 'Español',
           roomType: data.roomType ?? 'STANDARD',
           price: data.price ?? priceFor(data.format),
+          maxSeatsPerReservation: data.maxSeatsPerReservation ?? null,
         },
         true,
+      );
+
+      if (data.status === ShowtimeStatus.CANCELLED) continue;
+      // Idempotente: solo inserta las sillas que faltan, sin tocar el estado de las existentes.
+      const existing = await seats.find({ where: { showtimeId: showtime.id } });
+      const have = new Set(existing.map((seat) => `${seat.row}${seat.number}`));
+      const missing = seatTemplate(showtime.id, data.status === ShowtimeStatus.SOLD_OUT).filter(
+        (seat) => !have.has(`${seat.row}${seat.number}`),
+      );
+      if (missing.length > 0) await seats.insert(missing);
+      console.log(
+        `Sillas de la función ${showtime.id}: ${missing.length} nuevas, ${existing.length} existentes`,
       );
     }
   } finally {
