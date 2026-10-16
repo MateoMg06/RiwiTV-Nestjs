@@ -1,8 +1,13 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { BadRequestException, ForbiddenException, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { createHash } from 'crypto';
 import { AuthService } from './auth.service.js';
-import type { DataSource, EntityManager } from 'typeorm';
+import { QueryFailedError, type DataSource, type EntityManager } from 'typeorm';
 import type { MembershipService } from '../membership/membership.service.js';
 import type { MailService } from '../../common/utils/mail.js';
 import type { AuthDao } from './auth.dao.js';
@@ -393,6 +398,85 @@ describe('AuthService', () => {
           activationTokenExpires: null,
         }),
       );
+    });
+  });
+
+  describe('activate con pendingEmail (RN-034)', () => {
+    const pendingUser = (over: Partial<User> = {}) =>
+      buildUser({
+        pendingEmail: 'nuevo@example.com',
+        activationToken: 'x'.repeat(64),
+        activationTokenExpires: new Date(Date.now() + 60_000),
+        ...over,
+      });
+
+    it('intercambia el correo, limpia el token y conserva ACTIVE', async () => {
+      (userDao.findByActivationToken as ReturnType<typeof vi.fn>).mockResolvedValue(pendingUser());
+      (userDao.findByEmail as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+      (userDao.update as ReturnType<typeof vi.fn>).mockResolvedValue(
+        buildUser({ email: 'nuevo@example.com' }),
+      );
+
+      const result = await service.activate('x'.repeat(64));
+
+      expect(userDao.update).toHaveBeenCalledWith(1, {
+        email: 'nuevo@example.com',
+        pendingEmail: null,
+        activationToken: null,
+        activationTokenExpires: null,
+      });
+      expect(result.email).toBe('nuevo@example.com');
+      // No se toca accountStatus (sigue ACTIVE).
+      expect((userDao.update as ReturnType<typeof vi.fn>).mock.calls[0][1]).not.toHaveProperty(
+        'accountStatus',
+      );
+    });
+
+    it('409 y no cambia nada si el correo lo tomó otro usuario entretanto', async () => {
+      (userDao.findByActivationToken as ReturnType<typeof vi.fn>).mockResolvedValue(pendingUser());
+      (userDao.findByEmail as ReturnType<typeof vi.fn>).mockResolvedValue(buildUser({ id: 99 }));
+
+      await expect(service.activate('x'.repeat(64))).rejects.toBeInstanceOf(ConflictException);
+      expect(userDao.update).not.toHaveBeenCalled();
+    });
+
+    it('409 si el índice único lo rechaza (carrera)', async () => {
+      (userDao.findByActivationToken as ReturnType<typeof vi.fn>).mockResolvedValue(pendingUser());
+      (userDao.findByEmail as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+      (userDao.update as ReturnType<typeof vi.fn>).mockRejectedValue(
+        new QueryFailedError('UPDATE', [], Object.assign(new Error('dup'), { code: '23505' })),
+      );
+
+      await expect(service.activate('x'.repeat(64))).rejects.toBeInstanceOf(ConflictException);
+    });
+
+    it('un token expirado no cambia el correo', async () => {
+      (userDao.findByActivationToken as ReturnType<typeof vi.fn>).mockResolvedValue(
+        pendingUser({ activationTokenExpires: new Date(Date.now() - 1_000) }),
+      );
+
+      await expect(service.activate('x'.repeat(64))).rejects.toThrow(/expirado/);
+      expect(userDao.update).not.toHaveBeenCalled();
+    });
+
+    it('la activación normal (sin pendingEmail) no consulta el correo ni lo cambia', async () => {
+      (userDao.findByActivationToken as ReturnType<typeof vi.fn>).mockResolvedValue(
+        buildUser({
+          accountStatus: AccountStatus.INACTIVE,
+          pendingEmail: null,
+          activationTokenExpires: new Date(Date.now() + 60_000),
+        }),
+      );
+      (userDao.update as ReturnType<typeof vi.fn>).mockResolvedValue(buildUser());
+
+      await service.activate('x'.repeat(64));
+
+      expect(userDao.findByEmail).not.toHaveBeenCalled();
+      expect(userDao.update).toHaveBeenCalledWith(1, {
+        accountStatus: AccountStatus.ACTIVE,
+        activationToken: null,
+        activationTokenExpires: null,
+      });
     });
   });
 

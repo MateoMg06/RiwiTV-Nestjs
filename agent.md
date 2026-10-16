@@ -261,7 +261,7 @@ El original montaba cada ruta con prefijo `/api`, `/api/v1` y sin prefijo. **Nes
 | HU-006 | `POST /membership/create` | `POST /api/membership/create` (JWT, 201 `{ code, status }`, 409 si ya tiene) implementado |
 | HU-007 | `POST /api/auth/login`, `/refresh`, `/logout` | ✅ (+ `logout-all`, `me`); el login audita en `AccessAudits` |
 | HU-007 | `POST /api/auth/forgot-password`, `/reset-password` | `POST /api/auth/forgot-password` y `/reset-password` (públicos, 200) implementados |
-| HU-008 | `/api/profile`, `/api/membership`, `/benefits` | **No existe** |
+| HU-008 | `/api/profile`, `/api/membership`, `/benefits` | `GET`/`PUT /api/profile`, `GET /api/membership`, `GET /api/membership/benefits` (JWT) implementados; el cambio de correo queda en `pendingEmail` hasta verificarlo |
 | HU-009 | `GET /api/functions/:id`, `/prices` | **No existe** |
 | HU-010 | `GET /api/functions/:id/seats`, `/api/reservations/...` | **No existe** |
 
@@ -276,7 +276,7 @@ El original montaba cada ruta con prefijo `/api`, `/api/v1` y sin prefijo. **Nes
 
 | Regla | Backlog | Nest hoy |
 |---|---|---|
-| HU-007 | El login devuelve también membresía, beneficios y datos del perfil | Devuelve `membership` y `user`; `benefits` es `[]` hasta HU-008 |
+| HU-007 | El login devuelve también membresía, beneficios y datos del perfil | Devuelve `membership` (con `level`), `benefits` por nivel y `user` |
 | HU-010 | Máximo de sillas configurable **por función** | No existe (el original usaba `MAX_SEATS_PER_RESERVATION` global) |
 
 ### 5.4 Diferencias de contrato con el original

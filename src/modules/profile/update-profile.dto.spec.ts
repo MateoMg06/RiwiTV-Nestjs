@@ -28,6 +28,15 @@ describe('UpdateProfileDto (HU-008)', () => {
     ).resolves.toMatchObject({ name: 'Ana', acceptsNotifications: false });
   });
 
+  it('acepta email + confirmEmail y rechaza correos mal formados', async () => {
+    await expect(
+      pipe.transform({ email: 'a@b.co', confirmEmail: 'a@b.co' }, meta),
+    ).resolves.toMatchObject({ email: 'a@b.co' });
+    await expect(pipe.transform({ email: 'no-es-correo' }, meta)).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+  });
+
   it('admite photoUrl null para quitar la foto', async () => {
     await expect(pipe.transform({ photoUrl: null }, meta)).resolves.toMatchObject({
       photoUrl: null,

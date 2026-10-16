@@ -177,7 +177,8 @@ export class UserService {
     }
   }
 
-  private async assertEmailIsFree(email: string): Promise<void> {
+  /** 409 si el correo ya lo usa algún usuario (registro y cambio de correo del perfil). */
+  async assertEmailIsFree(email: string): Promise<void> {
     const used = await this.userDao.findByEmail(email);
     if (used) {
       throw new ConflictException('El correo ya está registrado');

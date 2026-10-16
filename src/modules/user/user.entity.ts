@@ -95,6 +95,10 @@ export class User {
 
   // --- Verificacion de correo ---
 
+  /** Nuevo correo a la espera de verificación (RN-034). `email` no cambia hasta confirmarlo. */
+  @Column({ type: 'varchar', nullable: true })
+  pendingEmail: string | null;
+
   @Column({ type: 'varchar', nullable: true, select: false })
   activationToken: string | null;
 

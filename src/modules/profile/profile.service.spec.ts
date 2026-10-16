@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import { NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
+import { createHash } from 'crypto';
 import { ProfileService } from './profile.service.js';
 import { MembershipLevel, MembershipStatus } from '../../common/enums/domain.enums.js';
 
@@ -8,6 +9,7 @@ const buildUser = (over: Record<string, unknown> = {}) => ({
   name: 'Ana',
   lastName: 'Pérez',
   email: 'ana@example.com',
+  pendingEmail: null,
   phone: '+573001112233',
   documentType: 'CC',
   documentNumber: '12345678',
@@ -37,10 +39,19 @@ function setup(user: unknown = buildUser(), membership: unknown = null) {
       ),
   };
   const membershipService = { findByUserId: vi.fn().mockResolvedValue(membership) };
+  const userService = { assertEmailIsFree: vi.fn().mockResolvedValue(undefined) };
+  const mail = { sendActivation: vi.fn().mockResolvedValue(undefined) };
   return {
     userDao,
     membershipService,
-    service: new ProfileService(userDao as never, membershipService as never),
+    userService,
+    mail,
+    service: new ProfileService(
+      userDao as never,
+      userService as never,
+      membershipService as never,
+      mail as never,
+    ),
   };
 }
 
@@ -58,6 +69,7 @@ describe('ProfileService.get (HU-008)', () => {
       name: 'Ana',
       lastName: 'Pérez',
       email: 'ana@example.com',
+      pendingEmail: null,
       phone: '+573001112233',
       documentType: 'CC',
       documentNumber: '12345678',
@@ -149,5 +161,96 @@ describe('ProfileService.update (HU-008)', () => {
 
     await expect(service.update(7, { name: 'Ana' })).rejects.toBeInstanceOf(NotFoundException);
     expect(userDao.update).not.toHaveBeenCalled();
+  });
+});
+
+describe('ProfileService.update: cambio de correo (RN-034)', () => {
+  const sha = (t: string) => createHash('sha256').update(t).digest('hex');
+  const dto = { email: 'nuevo@example.com', confirmEmail: 'nuevo@example.com' };
+
+  it('guarda pendingEmail y el SHA-256 del token, y envía el correo al nuevo', async () => {
+    const { service, userDao, userService, mail } = setup();
+
+    const result = await service.update(7, dto);
+
+    expect(userService.assertEmailIsFree).toHaveBeenCalledWith('nuevo@example.com');
+    const [id, data] = userDao.update.mock.calls[0];
+    expect(id).toBe(7);
+    expect(data.pendingEmail).toBe('nuevo@example.com');
+    expect(data.activationToken).toMatch(/^[0-9a-f]{64}$/);
+    expect(data.activationTokenExpires.getTime()).toBeGreaterThan(Date.now() + 23 * 3_600_000);
+    // No toca el correo actual, el estado de la cuenta ni las sesiones.
+    expect(data).not.toHaveProperty('email');
+    expect(data).not.toHaveProperty('accountStatus');
+
+    // Al correo va el token en claro; en BD, solo su hash.
+    const [to, name, token] = mail.sendActivation.mock.calls[0];
+    expect(to).toBe('nuevo@example.com');
+    expect(name).toBe('Ana');
+    expect(sha(token)).toBe(data.activationToken);
+    expect(token).not.toBe(data.activationToken);
+
+    expect(result).toMatchObject({
+      email: 'ana@example.com',
+      pendingEmail: 'nuevo@example.com',
+      emailVerificationRequired: true,
+    });
+  });
+
+  it('409 si el correo ya lo usa otro usuario, sin escribir ni enviar', async () => {
+    const { service, userDao, userService, mail } = setup();
+    userService.assertEmailIsFree.mockRejectedValue(new ConflictException('en uso'));
+
+    await expect(service.update(7, dto)).rejects.toBeInstanceOf(ConflictException);
+    expect(userDao.update).not.toHaveBeenCalled();
+    expect(mail.sendActivation).not.toHaveBeenCalled();
+  });
+
+  it('400 si los correos no coinciden o falta la confirmación', async () => {
+    const { service, userDao } = setup();
+
+    await expect(
+      service.update(7, { email: 'nuevo@example.com', confirmEmail: 'otro@example.com' }),
+    ).rejects.toThrow('Correos no coinciden');
+    await expect(service.update(7, { email: 'nuevo@example.com' })).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+    expect(userDao.update).not.toHaveBeenCalled();
+  });
+
+  it('un correo igual al actual (sin mayúsculas) se ignora', async () => {
+    const { service, userDao, userService, mail } = setup();
+
+    const result = await service.update(7, {
+      email: 'ANA@example.com',
+      confirmEmail: 'ANA@example.com',
+    });
+
+    expect(userService.assertEmailIsFree).not.toHaveBeenCalled();
+    expect(userDao.update).not.toHaveBeenCalled();
+    expect(mail.sendActivation).not.toHaveBeenCalled();
+    expect(result).not.toHaveProperty('emailVerificationRequired');
+  });
+
+  it('si el envío del correo falla, la actualización igual termina bien', async () => {
+    const { service, mail } = setup();
+    mail.sendActivation.mockRejectedValue(new Error('smtp caido'));
+
+    await expect(service.update(7, dto)).resolves.toMatchObject({
+      emailVerificationRequired: true,
+    });
+    await Promise.resolve();
+  });
+
+  it('combina el correo con otros campos en un solo UPDATE', async () => {
+    const { service, userDao } = setup();
+
+    await service.update(7, { ...dto, name: 'Luisa' });
+
+    expect(userDao.update).toHaveBeenCalledTimes(1);
+    expect(userDao.update.mock.calls[0][1]).toMatchObject({
+      name: 'Luisa',
+      pendingEmail: 'nuevo@example.com',
+    });
   });
 });

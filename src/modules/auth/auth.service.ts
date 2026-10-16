@@ -1,12 +1,13 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   Logger,
   UnauthorizedException,
 } from '@nestjs/common';
-import { createHash, randomBytes } from 'crypto';
-import { DataSource } from 'typeorm';
+import { randomBytes } from 'crypto';
+import { DataSource, QueryFailedError } from 'typeorm';
 import { JwtPayload } from 'jsonwebtoken';
 import { AuthDao } from './auth.dao.js';
 import { AccessAuditDao } from './access-audit.dao.js';
@@ -18,6 +19,7 @@ import { benefitsFor } from '../membership/membership-benefits.js';
 import { UserDao } from '../user/user.dao.js';
 import { RegisterDto } from './dto/register.dto.js';
 import { User } from '../user/user.entity.js';
+import { ACTIVATION_TTL_MS, hashToken } from '../../common/utils/token-hash.js';
 import { Bcrypt } from '../../common/utils/bcrypt.js';
 import { MailService } from '../../common/utils/mail.js';
 import { Jwt } from '../../common/utils/jwt.js';
@@ -51,7 +53,6 @@ const DEFAULT_REFRESH_TTL_MS = 604_800_000; // 7 dias
 const LOCK_DURATION_MINUTES = 15;
 
 /** Horas de validez del token de activacion de cuenta. */
-const ACTIVATION_TTL_MS = 24 * 60 * 60 * 1000;
 
 const DEFAULT_RESET_EXPIRY = '1h';
 const DEFAULT_RESET_TTL_MS = 3_600_000; // 1 hora
@@ -198,6 +199,9 @@ export class AuthService {
       throw new BadRequestException('El token de activacion ha expirado');
     }
 
+    // RN-034: el token venía de un cambio de correo; se confirma el correo nuevo.
+    if (user.pendingEmail) return this.confirmPendingEmail(user, user.pendingEmail);
+
     const updated = await this.userDao.update(user.id, {
       accountStatus: AccountStatus.ACTIVE,
       activationToken: null,
@@ -205,6 +209,35 @@ export class AuthService {
     });
 
     return this.toAuthUser(updated ?? user);
+  }
+
+  /**
+   * Cambia `email` por el pendiente y consume el token. Mantiene `accountStatus`. Si otro
+   * usuario tomó el correo entretanto (comprobación o índice único) → 409 y no cambia nada.
+   */
+  private async confirmPendingEmail(user: User, pendingEmail: string): Promise<AuthUser> {
+    const unavailable = new ConflictException('No se pudo verificar el correo');
+
+    const taken = await this.userDao.findByEmail(pendingEmail);
+    if (taken && taken.id !== user.id) throw unavailable;
+
+    try {
+      const updated = await this.userDao.update(user.id, {
+        email: pendingEmail,
+        pendingEmail: null,
+        activationToken: null,
+        activationTokenExpires: null,
+      });
+      return this.toAuthUser(updated ?? user);
+    } catch (error) {
+      if (
+        error instanceof QueryFailedError &&
+        (error.driverError as { code?: string } | undefined)?.code === '23505'
+      ) {
+        throw unavailable;
+      }
+      throw error;
+    }
   }
 
   // ------------------------------------------------------------------- login
@@ -547,16 +580,9 @@ export class AuthService {
     }
   }
 
-  /**
-   * SHA-256 del token, no bcrypt.
-   *
-   * bcrypt es lento a proposito para CONTRASENAS, porque el atacante elige el
-   * valor que adivina. Aqui el valor lo genera el servidor con alta entropia:
-   * no hay diccionario que atacar, asi que la lentitud solo castigaria cada
-   * renovacion de token.
-   */
+  /** SHA-256 del token (ver `token-hash.ts`). */
   private hashToken(token: string): string {
-    return createHash('sha256').update(token).digest('hex');
+    return hashToken(token);
   }
 
   /**

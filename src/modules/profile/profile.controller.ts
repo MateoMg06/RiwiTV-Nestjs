@@ -25,7 +25,7 @@ export class ProfileController {
   update(
     @Body() dto: UpdateProfileDto,
     @Req() request: AuthenticatedRequest,
-  ): Promise<ProfileResponse> {
+  ): Promise<ProfileResponse & { emailVerificationRequired?: true }> {
     return this.profileService.update(this.userIdOf(request), dto);
   }
 }
