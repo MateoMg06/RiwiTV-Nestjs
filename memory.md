@@ -150,6 +150,14 @@ No se implementa (no pertenece a HU-001 a HU-010):
 
 ## Registro de cambios
 
+### 2026-10-16 — feat(HU-005): DAO de solicitudes pendientes de aviso (paso 3 de 5 de RN-020)
+- **Archivos:** `src/modules/notification/release-notification.dao.ts`, `src/modules/notification/release-notification.dao.spec.ts`, `memory.md`.
+- **Qué:** `findPendingForActiveMovies(limit = 200)`: un `createQueryBuilder('rn')` con `innerJoin(Movie)` e `innerJoin(User)`, filtro `rn.status = PENDING AND m.status = ACTIVE`, orden `rn.id`, `limit`; devuelve `{ id, email, name, movieTitle }`. `markSent(id)`: `update({ id, status: PENDING }, { status: SENT })`, devuelve `affected === 1` (si otra ejecución ya la marcó, false).
+- **Por qué:** RN-020. El join cruza entidades en este DAO (excepción a «solo su entidad» de `agent.md` §3, mismo precedente que `ShowtimeDao`): trae columnas planas en una consulta y evita un N+1 (película y usuario por solicitud) o un service que haga tres consultas.
+- **Impacto:** ninguno en endpoints; sin variables nuevas.
+- **Verificación:** `npm run test` ✅ (312/312) · `npm run lint` ✅ · `npm run build` ✅.
+- **Pendiente derivado:** paso 5 (job).
+
 ### 2026-10-16 — feat(HU-005): `MailService.sendReleaseNotice` (paso 2 de 5 de RN-020)
 - **Archivos:** `src/common/utils/mail.ts`, `src/common/utils/mail.spec.ts`, `memory.md`.
 - **Qué:** `sendReleaseNotice(to, name, movieTitle)` envía texto plano en español («Hola {name}, {movieTitle} ya está en cartelera…»). Se extrae `private deliver(to, subject, text, devDetail)` compartido con `sendActivation` (envío + log «Correo emulado» sin SMTP; el detalle con el enlace sigue ocultándose en producción). Lanza si el transporte falla; el log no incluye datos sensibles.
