@@ -21,7 +21,7 @@
 
 ## Contexto de la migración
 
-- Requisitos: `docs/historias-de-usuario.md`, transcripción de las páginas 1–35 del PDF `Historia de usuario NodeJS Multicine Riwi (1).pdf` (backlog con HU-001 a HU-029; solo aplican las 10 primeras).
+- Requisitos: `docs/historias-de-usuario.md`, transcripción de las páginas 1–35 del PDF `docs/Historia de usuario NodeJS Multicine Riwi (1).pdf` (backlog con HU-001 a HU-029; solo aplican las 10 primeras).
 - Origen del código: `github.com/MateoMg06/RIWI-TV-PUBLIC`, rama **`main`** (`abbf621`). Sirve para detalles que el backlog no fija; si lo contradice, gana el backlog.
 - Ramas `feature/controller` y `feature/movie-module` del repo Nest usan otra estructura y su diff borra `auth`/`user`: **no hacer merge**, traer archivos a mano.
 
@@ -140,6 +140,14 @@ No se implementa (no pertenece a HU-001 a HU-010):
 18. [ ] HU-007: la respuesta de login no incluye membresía, beneficios ni datos del perfil — `src/modules/auth/auth.service.ts`.
 
 ## Registro de cambios
+
+### 2026-10-15 — docs: backlog oficial en PDF
+- **Archivos:** `docs/Historia de usuario NodeJS Multicine Riwi (1).pdf`
+- **Qué:** se versiona el PDF original del backlog (HU-001 a HU-029). La fuente de verdad para trabajar sigue siendo `docs/historias-de-usuario.md` (transcripción de HU-001 a HU-010).
+- **Por qué:** decisión de la persona: tener el documento original en el repo.
+- **Impacto:** ninguno en código.
+- **Verificación:** no aplica (solo documentación).
+- **Pendiente derivado:** ninguno.
 
 ### 2026-10-15 — feat(HU-005): próximos estrenos y solicitud de notificación
 - **Archivos:** `src/modules/movie/{movie.dao,movie.service,movie.controller,movie.module}.ts` y specs de dao, service y controller, `src/modules/notification/{release-notification.entity,release-notification.dao,upcoming-notification.dto,notification.service,notification.controller,notification.module}.ts` y sus specs (`release-notification.dao.spec.ts`, `upcoming-notification.dto.spec.ts`, `notification.service.spec.ts`, `notification.controller.spec.ts`), `src/common/enums/domain.enums.ts` (`NotificationStatus`), `src/database.ts`, `src/seeders/seed.ts`, `agent.md` (§5.1), `memory.md`.
