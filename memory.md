@@ -10,7 +10,7 @@
 | Auth: captcha | Implementado, con bug | Devuelve la respuesta al cliente (ver Bugs #1) |
 | Auth: registro + activación | Implementado | Cuenta nace INACTIVA; token 24 h; sin envío de correo aún (nodemailer instalado, no usado) |
 | Auth: login | Implementado | Bloqueo 15 min tras `MAX_FAILED_ATTEMPTS`; hash ficticio anti-enumeración |
-| Auth: refresh con rotación | Implementado, con bug | Cookie `refresh_token` con path incorrecto (Bugs #2) |
+| Auth: refresh con rotación | Implementado | Cookie `refresh_token` con path `/api/auth` |
 | Auth: logout / logout-all / me | Implementado | `revokeAllSessions` filtra mal (Bugs #3) |
 | Usuarios: CRUD | Parcial | Falta control de propiedad y alinear contrato con la API original |
 | Rutas heredadas `/api/users/auth`, `/api/users/legacy-login` | No migradas | Pendiente confirmar si algún cliente las usa |
@@ -51,7 +51,7 @@
 ## Bugs conocidos
 
 1. [ ] `GET /auth/captcha` expone `answer` — `src/modules/auth/auth.controller.ts`, `src/common/utils/captcha.ts`.
-2. [ ] Cookie `refresh_token` con `path: '/auth'` pero la ruta real es `/api/auth` — `auth.controller.ts`.
+2. [x] Cookie `refresh_token` con `path: '/auth'` pero la ruta real es `/api/auth` — `auth.controller.ts`.
 3. [ ] `revokedAt: undefined` no filtra en TypeORM; usar `IsNull()` — `src/modules/auth/auth.dao.ts`.
 4. [ ] `__dirname` en ESM — `src/config/config.service.ts`.
 5. [ ] `.env` no se carga en `process.env` pero varios módulos lo leen de ahí — `database.ts`, `cors.ts`, `auth.service.ts`, `user.service.ts`.
@@ -67,6 +67,14 @@
 15. [ ] Email no implementado (nodemailer instalado sin uso).
 
 ## Registro de cambios
+
+### 2026-10-15 — fix: cookie de refresh con path `/api/auth`
+- **Archivos:** `src/modules/auth/auth.controller.ts`, `src/modules/auth/auth.controller.spec.ts`
+- **Qué:** la cookie `refresh_token` se emite y se borra con `path: '/api/auth'` (constante `REFRESH_COOKIE_PATH`). Antes era `/auth` y el navegador no la enviaba a `/api/auth/refresh` ni a `/api/auth/logout`.
+- **Por qué:** Bug #2.
+- **Impacto:** refresh y logout por cookie funcionan en navegador.
+- **Verificación:** `npm run test` ✅ (104/104) · `npm run lint` ✅ · `npm run build` ✅ (ejecutados sobre el conjunto de arreglos de esta sesión).
+- **Pendiente derivado:** si cambia el prefijo global en `main.ts`, actualizar `REFRESH_COOKIE_PATH`.
 
 ### 2026-10-15 — fix: el guard lee la cookie `accessToken`
 - **Archivos:** `src/common/guards/auth.guard.ts`, `src/common/guards/auth.guard.spec.ts`

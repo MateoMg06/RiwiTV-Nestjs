@@ -129,7 +129,7 @@ describe('AuthController', () => {
       expect(result).toEqual(tokens);
     });
 
-    it('emite las dos cookies httpOnly, con la de refresh restringida a /auth', async () => {
+    it('emite las dos cookies httpOnly, con la de refresh restringida a /api/auth', async () => {
       (authService.login as ReturnType<typeof vi.fn>).mockResolvedValue(tokens);
       const response = buildResponse();
 
@@ -147,10 +147,10 @@ describe('AuthController', () => {
       expect(access?.[1]).toBe(tokens.accessToken);
       expect(access?.[2]).toMatchObject({ httpOnly: true, path: '/' });
 
-      // El refresh solo lo necesita /auth: limitar el path reduce la ventana
+      // El refresh solo lo necesita /api/auth: limitar el path reduce la ventana
       // en la que un token de renovacion viaja en peticiones normales.
       expect(refresh?.[1]).toBe(tokens.refreshToken);
-      expect(refresh?.[2]).toMatchObject({ httpOnly: true, path: '/auth' });
+      expect(refresh?.[2]).toMatchObject({ httpOnly: true, path: '/api/auth' });
     });
 
     it('no marca secure fuera de produccion (si, el navegador rechazaria la cookie en local)', async () => {
@@ -322,7 +322,7 @@ describe('AuthController', () => {
       });
       expect(calls.find(([name]) => name === REFRESH_COOKIE)?.[1]).toMatchObject({
         httpOnly: true,
-        path: '/auth',
+        path: '/api/auth',
       });
     });
   });

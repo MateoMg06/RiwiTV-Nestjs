@@ -22,6 +22,11 @@ import { CaptchaChallenge } from '../../common/utils/captcha.js';
 /** Nombres de las cookies de sesion, centralizados para no desincronizarlos. */
 const ACCESS_COOKIE = 'accessToken';
 const REFRESH_COOKIE = 'refresh_token';
+/**
+ * Path de la cookie de refresh. Incluye el prefijo global `api` (main.ts): con
+ * solo `/auth` el navegador nunca la enviaria a `/api/auth/refresh`.
+ */
+const REFRESH_COOKIE_PATH = '/api/auth';
 
 @Controller('auth')
 export class AuthController {
@@ -183,14 +188,14 @@ export class AuthController {
       path: '/',
     });
 
-    // El refresh se limita a /auth: es la unica ruta que lo necesita. Asi, si
+    // El refresh se limita a /api/auth: es la unica ruta que lo necesita. Asi, si
     // el servidor llegara a emitirlo en otra respuesta, el navegador no lo
     // adjuntaria a las peticiones normales de la API.
     response.cookie(REFRESH_COOKIE, tokens.refreshToken, {
       httpOnly: true,
       secure: isProduction,
       sameSite: 'strict',
-      path: '/auth',
+      path: REFRESH_COOKIE_PATH,
     });
   }
 
@@ -208,7 +213,7 @@ export class AuthController {
       httpOnly: true,
       secure: isProduction,
       sameSite: 'strict',
-      path: '/auth',
+      path: REFRESH_COOKIE_PATH,
     });
   }
 
