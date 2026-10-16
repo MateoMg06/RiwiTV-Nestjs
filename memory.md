@@ -182,6 +182,13 @@ No se implementa (no pertenece a HU-001 a HU-010):
 
 ## Registro de cambios
 
+### 2026-10-16 — build(HU-001): plugin de Swagger y se quita `swagger-jsdoc` (paso 1 de 4, Swagger publicado)
+- **Archivos:** `nest-cli.json`, `package.json`, `package-lock.json`, `memory.md`.
+- **Qué:** `nest-cli.json` activa el plugin `@nestjs/swagger` (`classValidatorShim`, `introspectComments`) para generar las propiedades de los DTO a partir de TypeScript y `class-validator`. `npm run build` pasa de `tsc` a `nest build -p tsconfig.build.json` (el plugin solo corre con el compilador de Nest). Se desinstalan `swagger-jsdoc` y `@types/swagger-jsdoc` (sin usos en `src`, `test` ni `docs`).
+- **Por qué:** HU-001 RN-003, Swagger generado automáticamente.
+- **Impacto:** ninguno en endpoints. `dist/main.js`, `dist/seeders/seed.js` y `dist/app.module.js` salen en la misma ruta (`start:prod`, `seed` y el `Dockerfile` siguen igual). Sin variables nuevas.
+- **Verificación:** `npm run test` ✅ (522/522) · `npm run lint` ✅ · `npm run build` ✅. Swagger: script temporal (borrado) que crea la app con `Test.createTestingModule` sin BD (`DataSource.initialize` sustituido por `buildMetadatas`) y lee `/api/docs-json`: 43 rutas, los DTO de body tienen propiedades (`UpdateUserDto` sale vacío porque usa `PartialType` de `@nestjs/mapped-types`). `require('./dist/app.module.js')` ✅.
+- **Pendiente derivado:** pasos 2–4 (decoradores en controllers, README, archivo de memoria).
 ### 2026-10-16 — feat(HU-010): seed de sillas y cierre de la historia (paso 6 de 6)
 - **Archivos:** `src/seeders/seed.ts`, `agent.md` (§5.1 fila HU-010, §5.3 fila HU-010), `memory.md`.
 - **Qué:** el seed crea la sala (8×10) de cada función no cancelada con filas preferenciales, VIP (+5000), unas `SOLD`/`DISABLED` y todas `SOLD` en las `SOLD_OUT`; es idempotente. Una función con `maxSeatsPerReservation = 2`. HU-010 pasa a «Completa salvo prueba manual»; guion de prueba manual en Pendientes.
