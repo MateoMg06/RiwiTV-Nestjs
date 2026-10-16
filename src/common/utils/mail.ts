@@ -52,11 +52,28 @@ export class MailService {
       `Gracias por registrarte en RiwiTV. Para activar tu cuenta abre este enlace:\n${link}\n\n` +
       'El enlace es válido durante 24 horas. Si no creaste la cuenta, ignora este correo.';
 
+    await this.deliver(to, subject, text, `, enlace ${link}`);
+  }
+
+  /** Aviso de que un próximo estreno ya está en cartelera (RN-020). Lanza si el envío falla. */
+  async sendReleaseNotice(to: string, name: string, movieTitle: string): Promise<void> {
+    const subject = `${movieTitle} ya está en cartelera`;
+    const text =
+      `Hola ${name},\n\n` +
+      `${movieTitle} ya está en cartelera en RiwiTV. Entra a ${this.frontendUrl} para ver las funciones.`;
+
+    await this.deliver(to, subject, text);
+  }
+
+  /**
+   * Envío común. `devDetail` (p. ej. un enlace con token) solo se registra en el log emulado
+   * fuera de producción (agent.md §8).
+   */
+  private async deliver(to: string, subject: string, text: string, devDetail = ''): Promise<void> {
     await this.transporter.sendMail({ from: this.from, to, subject, text });
 
     if (this.emulated) {
-      // El enlace lleva el token: solo se muestra fuera de producción (agent.md §8).
-      const suffix = process.env.NODE_ENV === 'production' ? '' : `, enlace ${link}`;
+      const suffix = process.env.NODE_ENV === 'production' ? '' : devDetail;
       this.logger.log(
         `Correo emulado (sin SMTP_HOST): destinatario ${to}, asunto "${subject}"${suffix}`,
       );

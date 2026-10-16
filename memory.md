@@ -150,6 +150,14 @@ No se implementa (no pertenece a HU-001 a HU-010):
 
 ## Registro de cambios
 
+### 2026-10-16 — feat(HU-005): `MailService.sendReleaseNotice` (paso 2 de 5 de RN-020)
+- **Archivos:** `src/common/utils/mail.ts`, `src/common/utils/mail.spec.ts`, `memory.md`.
+- **Qué:** `sendReleaseNotice(to, name, movieTitle)` envía texto plano en español («Hola {name}, {movieTitle} ya está en cartelera…»). Se extrae `private deliver(to, subject, text, devDetail)` compartido con `sendActivation` (envío + log «Correo emulado» sin SMTP; el detalle con el enlace sigue ocultándose en producción). Lanza si el transporte falla; el log no incluye datos sensibles.
+- **Por qué:** RN-020. `deliver` ya tiene dos usos reales (`agent.md` §4.1).
+- **Impacto:** ninguno en endpoints, BD ni variables de entorno.
+- **Verificación:** `npm run test` ✅ (308/308) · `npm run lint` ✅ · `npm run build` ✅.
+- **Pendiente derivado:** pasos 3 a 5.
+
 ### 2026-10-16 — build(HU-005): `@nestjs/schedule` y `NotificationStatus.SENT` (paso 1 de 5 de RN-020)
 - **Archivos:** `package.json`, `package-lock.json`, `src/common/enums/domain.enums.ts`, `memory.md`.
 - **Qué:** se instala `@nestjs/schedule` 12.0.2 (peerDependencies `@nestjs/core`/`common` `^11 || ^12`, compatible con `^12.0.1`; sin `--force` ni `--legacy-peer-deps`). `NotificationStatus` gana `SENT`.

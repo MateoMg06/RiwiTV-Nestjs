@@ -88,4 +88,37 @@ describe('MailService (HU-006)', () => {
 
     await expect(mail.sendActivation('a@b.co', 'A', 't')).rejects.toThrow('smtp caído');
   });
+
+  describe('sendReleaseNotice (HU-005)', () => {
+    it('envía texto plano en español con el título de la película', async () => {
+      const mail = new MailService(configWith({ SMTP_HOST: 'smtp.example.com' }));
+
+      await mail.sendReleaseNotice('ana@example.com', 'Ana', 'Noche en Medellín');
+
+      const sent = sendMail.mock.calls[0][0];
+      expect(sent.to).toBe('ana@example.com');
+      expect(sent.subject).toContain('Noche en Medellín');
+      expect(sent.text).toContain('Hola Ana');
+      expect(sent.text).toContain('Noche en Medellín ya está en cartelera');
+      expect(sent.html).toBeUndefined();
+    });
+
+    it('sin SMTP_HOST se emula y se registra el destinatario', async () => {
+      const mail = new MailService(configWith({}));
+      const log = vi.spyOn(mail['logger'], 'log').mockImplementation(() => undefined);
+
+      await mail.sendReleaseNotice('ana@example.com', 'Ana', 'Noche en Medellín');
+
+      expect(nodemailer.createTransport).toHaveBeenCalledWith({ jsonTransport: true });
+      expect(String(log.mock.calls[0][0])).toContain('Correo emulado');
+      expect(String(log.mock.calls[0][0])).toContain('ana@example.com');
+    });
+
+    it('propaga el error si el transporte falla', async () => {
+      sendMail.mockRejectedValue(new Error('smtp caído'));
+      const mail = new MailService(configWith({ SMTP_HOST: 'smtp.example.com' }));
+
+      await expect(mail.sendReleaseNotice('a@b.co', 'A', 'Peli')).rejects.toThrow('smtp caído');
+    });
+  });
 });
