@@ -85,6 +85,12 @@ export class ProfileService {
       data.pendingEmail = dto.email;
       data.activationToken = hashToken(verificationToken);
       data.activationTokenExpires = new Date(Date.now() + ACTIVATION_TTL_MS);
+    } else if (dto.email !== undefined && user.pendingEmail) {
+      // Mismo correo que el actual: se cancela el cambio pendiente (la cuenta es ACTIVE,
+      // el token de activación solo servía para ese cambio).
+      data.pendingEmail = null;
+      data.activationToken = null;
+      data.activationTokenExpires = null;
     }
 
     if (Object.keys(data).length === 0) return this.toProfile(user);

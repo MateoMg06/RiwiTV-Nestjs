@@ -52,8 +52,7 @@ const DEFAULT_REFRESH_TTL_MS = 604_800_000; // 7 dias
 /** Minutos que dura un bloqueo por intentos fallidos. */
 const LOCK_DURATION_MINUTES = 15;
 
-/** Horas de validez del token de activacion de cuenta. */
-
+/** Vigencia por defecto del token JWT de restablecimiento de contrasena. */
 const DEFAULT_RESET_EXPIRY = '1h';
 const DEFAULT_RESET_TTL_MS = 3_600_000; // 1 hora
 
@@ -150,7 +149,7 @@ export class AuthService {
     const { user, membership } = await this.dataSource.transaction(async (manager) => {
       const created = await this.userService.create({ ...dto, role: UserRole.USUARIO }, manager, {
         // En BD solo el SHA-256 (agent.md §4.8); el token en claro va al correo.
-        activationToken: this.hashToken(activationToken),
+        activationToken: hashToken(activationToken),
         activationTokenExpires,
       });
       const membership = await this.membershipService.createForUser(created.id, manager);
@@ -189,7 +188,7 @@ export class AuthService {
    * correo de activacion no debe permitir reutilizar un token viejo.
    */
   async activate(token: string): Promise<AuthUser> {
-    const user = await this.userDao.findByActivationToken(this.hashToken(token));
+    const user = await this.userDao.findByActivationToken(hashToken(token));
 
     if (!user) {
       throw new BadRequestException('Token de activacion invalido');
@@ -320,7 +319,7 @@ export class AuthService {
       );
 
       await this.userDao.update(user.id, {
-        resetToken: this.hashToken(token),
+        resetToken: hashToken(token),
         resetTokenExpires: new Date(Date.now() + ttlMs),
       });
 
@@ -349,7 +348,7 @@ export class AuthService {
       throw new BadRequestException('La contraseña no cumple con los parámetros requeridos');
     }
 
-    const tokenHash = this.hashToken(dto.token);
+    const tokenHash = hashToken(dto.token);
     const user = await this.userDao.findByResetTokenHash(tokenHash);
 
     if (!user || !user.resetTokenExpires || user.resetTokenExpires.getTime() <= Date.now()) {
@@ -383,7 +382,7 @@ export class AuthService {
    * forma de saber cual de las dos es la falsa.
    */
   async refresh(refreshToken: string, context: SessionContext = {}): Promise<AuthResponse> {
-    const session = await this.authDao.findByRefreshTokenHash(this.hashToken(refreshToken));
+    const session = await this.authDao.findByRefreshTokenHash(hashToken(refreshToken));
 
     if (!session) {
       throw new UnauthorizedException('Refresh token invalido');
@@ -425,7 +424,7 @@ export class AuthService {
    * obliga a manejar un caso que en realidad es un exito.
    */
   async logout(refreshToken: string): Promise<void> {
-    const session = await this.authDao.findByRefreshTokenHash(this.hashToken(refreshToken));
+    const session = await this.authDao.findByRefreshTokenHash(hashToken(refreshToken));
 
     if (!session || session.revokedAt !== null) {
       return;
@@ -490,7 +489,7 @@ export class AuthService {
 
     await this.authDao.createSession({
       userId: user.id,
-      refreshTokenHash: this.hashToken(refreshToken),
+      refreshTokenHash: hashToken(refreshToken),
       expiresAt: new Date(Date.now() + refreshTtlMs),
       revokedAt: null,
       lastUsedAt: null,
@@ -578,11 +577,6 @@ export class AuthService {
     if (user.accountStatus !== AccountStatus.ACTIVE) {
       throw new ForbiddenException('La cuenta no esta activa. Verifica tu correo.');
     }
-  }
-
-  /** SHA-256 del token (ver `token-hash.ts`). */
-  private hashToken(token: string): string {
-    return hashToken(token);
   }
 
   /**

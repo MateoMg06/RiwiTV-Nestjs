@@ -125,6 +125,7 @@ Por historia:
 - [x] HU-008: `GET`/`PUT /profile`, `GET /membership`, `/membership/benefits`, cambio de correo con nueva validación.
 - [ ] HU-008: `purchaseHistory` y `activeReservations` (perfil) y `bonuses` (beneficios) devuelven `[]`; rellenarlos cuando existan reservas (HU-010) y compras/bonos (fuera de alcance).
 - [ ] HU-008: prueba manual contra Postgres (`Users.photoUrl`, `Users.pendingEmail` y `Memberships.level` los crea `synchronize`; se borra `Users.membership`): `GET /api/membership` y `/benefits` (200; 404 sin membresía), `GET /api/profile`, `PUT /api/profile` con nombre/foto https/`acceptsNotifications` (200), con `role` o `cityId` (400), con `email`+`confirmEmail` nuevo (200, `emailVerificationRequired`, el log emulado muestra el enlace), `POST /api/auth/verify-email` con ese token (el `GET /profile` ya muestra el correo nuevo) y con el correo ya tomado (409).
+- [ ] HU-006/HU-007/HU-008: la comparación de correos distingue mayúsculas en `UserDao.findByEmail` y en el índice único de `Users.email` (`Ana@x.com` ≠ `ana@x.com`): afecta registro, login, forgot-password y cambio de correo. Decidir si se normaliza a minúsculas (no corregido).
 - [ ] HU-009: `GET /functions/:id`, `/prices`; solo funciones activas y no iniciadas.
 - [ ] HU-010: `GET /functions/:id/seats`, `POST /reservations/lock-seats`, `DELETE /reservations/release-seats`, `GET /reservations/summary`; job de liberación (`@nestjs/schedule`); máximo de sillas por función; auditoría de bloqueos; variable `SEAT_LOCK_MINUTES`.
 
@@ -165,6 +166,13 @@ No se implementa (no pertenece a HU-001 a HU-010):
 
 ## Registro de cambios
 
+### 2026-10-16 — refactor(HU-008): limpieza de auth y cancelación de correo pendiente
+- **Archivos:** `src/modules/auth/auth.service.ts`, `src/modules/profile/profile.service.ts`, `src/modules/profile/profile.service.spec.ts`, `memory.md`.
+- **Qué:** (1) comentario huérfano sobre `DEFAULT_RESET_EXPIRY` reemplazado por uno correcto. (2) Se elimina el método privado `AuthService.hashToken`; se usa `hashToken` de `common/utils/token-hash.ts` directamente (los tests no lo espiaban). (3) `PUT /profile` con un `email` igual al actual (sin distinguir mayúsculas) y un `pendingEmail` previo cancela el cambio: `pendingEmail`, `activationToken` y `activationTokenExpires` pasan a `null`; sin `emailVerificationRequired` ni correo. Las cuentas INACTIVE no llegan aquí (PUT exige JWT y el login exige ACTIVE), así que no afecta la activación de registro.
+- **Por qué:** revisión de HU-008 (RN-034): un cambio de correo pendiente no se podía descartar.
+- **Impacto:** `PUT /api/profile`; sin cambios de BD ni de variables de entorno.
+- **Verificación:** `npm run test` ✅ (417/417) · `npm run lint` ✅ · `npm run build` ✅
+- **Pendiente derivado:** correos sensibles a mayúsculas (ver Pendientes).
 ### 2026-10-16 — feat(HU-008): cambio de correo con nueva validación, RN-034 (paso 6 de 6)
 - **Archivos:** `src/modules/profile/{update-profile.dto,profile.service,profile.controller}.ts` (+specs), `src/modules/auth/auth.service.ts` (+spec), `src/modules/user/{user.entity,user.service}.ts`, `src/common/utils/token-hash.ts`, `agent.md`, `memory.md`.
 - **Qué:** `User.pendingEmail` (varchar nullable, visible en `GET /profile`). `PUT /profile` acepta `email` + `confirmEmail` (deben coincidir, si no 400 «Correos no coinciden», el mismo mensaje de `UserService`). Si el correo difiere del actual (sin distinguir mayúsculas): `UserService.assertEmailIsFree` (ahora público, sin duplicar) da 409 si lo usa otro; se genera token (`randomBytes(32)`), se guarda su SHA-256 en `activationToken` con 24 h y el correo nuevo en `pendingEmail`; **`email`, `accountStatus` y las sesiones no cambian**. `MailService.sendActivation(pendingEmail, …)` va sin await y un fallo se loguea sin token. Respuesta: perfil + `emailVerificationRequired: true`. Correo igual al actual: se ignora. `AuthService.activate`: si el usuario tiene `pendingEmail`, pone `email = pendingEmail`, limpia `pendingEmail` y el token, conserva `accountStatus`; si el correo quedó tomado (comprobación o error 23505) → 409 «No se pudo verificar el correo» sin cambios. Sin `pendingEmail`, la activación es la de siempre. `hashToken` y `ACTIVATION_TTL_MS` pasan a `common/utils/token-hash.ts` (los usan `AuthService` y `ProfileService`).

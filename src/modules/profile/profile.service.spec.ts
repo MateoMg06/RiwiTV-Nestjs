@@ -232,6 +232,30 @@ describe('ProfileService.update: cambio de correo (RN-034)', () => {
     expect(result).not.toHaveProperty('emailVerificationRequired');
   });
 
+  it('el correo actual con un cambio pendiente cancela ese cambio', async () => {
+    const pending = buildUser({
+      pendingEmail: 'nuevo@example.com',
+      activationToken: 'a'.repeat(64),
+      activationTokenExpires: new Date(Date.now() + 3_600_000),
+    });
+    const { service, userDao, userService, mail } = setup(pending);
+
+    const result = await service.update(7, {
+      email: 'ANA@example.com',
+      confirmEmail: 'ANA@example.com',
+    });
+
+    expect(userService.assertEmailIsFree).not.toHaveBeenCalled();
+    expect(userDao.update).toHaveBeenCalledWith(7, {
+      pendingEmail: null,
+      activationToken: null,
+      activationTokenExpires: null,
+    });
+    expect(mail.sendActivation).not.toHaveBeenCalled();
+    expect(result.pendingEmail).toBeNull();
+    expect(result).not.toHaveProperty('emailVerificationRequired');
+  });
+
   it('si el envío del correo falla, la actualización igual termina bien', async () => {
     const { service, mail } = setup();
     mail.sendActivation.mockRejectedValue(new Error('smtp caido'));
