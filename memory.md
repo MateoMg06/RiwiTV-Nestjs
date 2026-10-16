@@ -138,7 +138,7 @@ No se implementa (no pertenece a HU-001 a HU-010):
 5. [x] `.env` no se carga en `process.env` pero varios módulos lo leen de ahí — `database.ts`, `cors.ts`, `auth.service.ts`, `user.service.ts`.
 6. [x] `/user/:id` sin control de propiedad; `POST /user` sin `@Roles`; `+id` sin `ParseIntPipe` — `src/modules/user/user.controller.ts`.
 7. [x] Política de contraseña inconsistente (DTO 8–72 vs validador ≥10 + complejidad). Resuelto: `CreateUserDto` usa `@Length(10, 72)` (RN-022); `UpdateUserDto` lo hereda.
-8. [ ] `AuthPayload` declara `name`/`membership` que el token no trae.
+8. [x] `AuthPayload` declara `name`/`membership` que el token no trae. Resuelto: `AuthPayload` queda con `id`, `role` y `email?` (quitados `name`, `membership`, `cityId`; sin usos).
 9. [ ] Credenciales de ejemplo de ObserveModule en `app.module.ts`; nombres de variables inconsistentes en `.env.example`.
 10. [ ] Captcha en memoria (no escala; limpieza nunca se ejecuta).
 11. [ ] Sin migraciones (`synchronize: true`).
@@ -151,6 +151,14 @@ No se implementa (no pertenece a HU-001 a HU-010):
 18. [ ] HU-007: la respuesta de login no incluye membresía, beneficios ni datos del perfil — `src/modules/auth/auth.service.ts`.
 
 ## Registro de cambios
+
+### 2026-10-16 — fix(HU-007): `AuthPayload` refleja las claims reales del token (bug #8, paso 2 de 6)
+- **Archivos:** `src/modules/auth/interfaces/auth-payload.interface.ts`, `memory.md`.
+- **Qué:** se quitan `name`, `membership` y `cityId` de `AuthPayload`; quedan `id`, `role`, `email?` (más las de `JwtPayload`, `sub` incluida). `grep` confirma que nadie los usa (`CurrentUser` no se usa con esos campos; ningún código lee `request.user.name/membership/cityId`).
+- **Por qué:** el tipo prometía datos que el token no trae.
+- **Impacto:** ninguno en runtime (solo tipos). Sin test nuevo: no hay comportamiento; `tsc` verifica que nada los usaba.
+- **Verificación:** `npm run test` ✅ (320/320) · `npm run lint` ✅ · `npm run build` ✅.
+- **Pendiente derivado:** pasos 3 a 6.
 
 ### 2026-10-16 — fix(HU-007): RN-030, cada login revoca las sesiones previas (bug #17, paso 1 de 6)
 - **Archivos:** `src/modules/auth/auth.service.ts`, `src/modules/auth/auth.service.spec.ts`, `src/modules/auth/entities/session.entity.ts` (JSDoc), `agent.md` (§5.2, §5.3), `memory.md`.
