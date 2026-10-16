@@ -38,4 +38,8 @@ export class Showtime {
   /** Postgres devuelve `decimal` como string; el service lo convierte a número. */
   @Column({ type: 'decimal', precision: 12, scale: 2, default: 0 })
   price: string;
+
+  /** Máximo de sillas por usuario en esta función (HU-010); null = `MAX_SEATS_PER_RESERVATION`. */
+  @Column({ type: 'int', nullable: true })
+  maxSeatsPerReservation: number | null;
 }

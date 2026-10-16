@@ -91,6 +91,13 @@
 - HU-008: descuentos por nivel BRONCE 0 / PLATA 5 / ORO 10 / PLATINO 15 en `DISCOUNT_BY_LEVEL` (constante única, decisión de la persona); toda membresía nace BRONCE y no hay endpoint de cambio de nivel. El QR es solo el contenido (`qr.payload` = código único); el frontend dibuja la imagen. Se eliminó `User.membership` y el enum `Membership` (BASICA/PLATA).
 - HU-008: la foto es una URL https (máx. 500) en `User.photoUrl`, `null` la quita; no hay subida de archivos. `favoriteCinemaId` y `cityId` no se editan en `PUT /profile` (`cityId` solo por `/users/location`, RN-006).
 - HU-008 / RN-034: **modo correo pendiente** (decisión de la persona; no se desactiva la cuenta). El correo nuevo va a `pendingEmail` y se verifica con el mismo token y endpoint de activación (`verify-email`/`activate`, SHA-256, 24 h); hasta confirmar, `email`, `accountStatus` y las sesiones no cambian y el login sigue con el correo viejo. No hay endpoint de reenvío (se repite el `PUT /profile`). Si el correo se ocupa antes de verificar → 409.
+- HU-010: sillas = tabla `Seats` por función (`showtimeId`, `row`, `number`, `type`, `status`, `priceModifier`, `heldByUserId`, `heldUntil`); no hay entidades `Room` ni `SeatLock` aparte (el bloqueo vive en la propia silla). Estados persistidos `AVAILABLE`/`HELD`/`SOLD`/`DISABLED`; «Seleccionada» es del frontend. `SOLD` solo lo escribe el seed: el código nunca lo escribe y la liberación nunca toca `SOLD` ni `DISABLED`. `SeatType` pasa a `ESTANDAR`/`PREFERENCIAL`/`VIP` (el anterior no se usaba).
+- HU-010: RN-042 — las sillas preferenciales se bloquean como cualquier otra; la respuesta expone `type: PREFERENCIAL`. Faltan las políticas del cine (ver Pendientes).
+- HU-010: precio por silla = `Number(showtime.price) + Number(seat.priceModifier)` (precio de lista, sin descuento de membresía). El seed pone `priceModifier` 5000 a las VIP y 0 al resto.
+- HU-010: re-bloquear renueva el plazo de **todas** las sillas `HELD` vigentes del usuario en esa función (un solo vencimiento) y se audita como `LOCKED`.
+- HU-010: la auditoría (`SeatAudits`) es **fail-closed**: se escribe dentro de la misma transacción que el cambio; si falla, nada se bloquea/libera.
+- HU-010: máximo de sillas por función = `Showtimes.maxSeatsPerReservation` (nullable) con respaldo `MAX_SEATS_PER_RESERVATION` (default 8). El bloqueo dura `SEAT_LOCK_MINUTES` (default 10).
+- HU-010: sin WebSockets; el frontend hace polling del mapa. `activeReservations` de HU-008 sigue `[]` y `SOLD_OUT` de HU-009 no se deriva de las sillas.
 
 ## Pendientes
 
@@ -130,6 +137,7 @@ Por historia:
 - [ ] HU-008: prueba manual contra Postgres (`Users.photoUrl`, `Users.pendingEmail` y `Memberships.level` los crea `synchronize`; se borra `Users.membership`): `GET /api/membership` y `/benefits` (200; 404 sin membresía), `GET /api/profile`, `PUT /api/profile` con nombre/foto https/`acceptsNotifications` (200), con `role` o `cityId` (400), con `email`+`confirmEmail` nuevo (200, `emailVerificationRequired`, el log emulado muestra el enlace), `POST /api/auth/verify-email` con ese token (el `GET /profile` ya muestra el correo nuevo) y con el correo ya tomado (409).
 - [ ] HU-006/HU-007/HU-008: la comparación de correos distingue mayúsculas en `UserDao.findByEmail` y en el índice único de `Users.email` (`Ana@x.com` ≠ `ana@x.com`): afecta registro, login, forgot-password y cambio de correo. Decidir si se normaliza a minúsculas (no corregido).
 - [ ] HU-009: `GET /functions/:id`, `/prices`; solo funciones activas y no iniciadas.
+- [ ] HU-010 (RN-042): faltan las políticas del cine sobre sillas preferenciales (hoy se bloquean como cualquier silla).
 - [ ] HU-010: `GET /functions/:id/seats`, `POST /reservations/lock-seats`, `DELETE /reservations/release-seats`, `GET /reservations/summary`; job de liberación (`@nestjs/schedule`); máximo de sillas por función; auditoría de bloqueos; variable `SEAT_LOCK_MINUTES`.
 
 ## Código sin uso
@@ -169,6 +177,13 @@ No se implementa (no pertenece a HU-001 a HU-010):
 
 ## Registro de cambios
 
+### 2026-10-16 — feat(HU-010): enums de sillas, configuración y máximo por función (paso 1 de 6)
+- **Archivos:** `src/common/enums/domain.enums.ts`, `src/config/config.keys.ts`, `.env.example`, `src/modules/showtime/showtime.entity.ts`, `memory.md`.
+- **Qué:** `SeatType` (sin uso) se reemplaza por `{ ESTANDAR, PREFERENCIAL, VIP }`; nuevos `SeatStatus { AVAILABLE, HELD, SOLD, DISABLED }` y `SeatAuditEvent { LOCKED, RELEASED, EXPIRED }`. `Config.SEAT_LOCK_MINUTES` (default 10) y `Config.MAX_SEATS_PER_RESERVATION` (default 8), ambos en `.env.example`. Columna `Showtimes.maxSeatsPerReservation` (int, nullable; la crea `synchronize`).
+- **Por qué:** base de HU-010 (RN-040 plazo de bloqueo; máximo configurable por función). Decisiones registradas arriba.
+- **Impacto:** variables de entorno nuevas `SEAT_LOCK_MINUTES` y `MAX_SEATS_PER_RESERVATION`; columna nueva en `Showtimes`. Sin cambios de API.
+- **Verificación:** `npm run test` ✅ (435/435) · `npm run lint` ✅ · `npm run build` ✅
+- **Pendiente derivado:** entidades, DAOs, service, job y seed (pasos 2–6).
 ### 2026-10-16 — feat(HU-009): `GET /functions/:id` y `/prices` (paso 4 de 4)
 - **Archivos:** `src/modules/showtime/functions.controller.ts`, `functions.controller.spec.ts`, `showtime.module.ts`, `agent.md` (§5.1 fila HU-009), `memory.md`.
 - **Qué:** `FunctionsController` (`@Controller('functions')`) con `GET :id` y `GET :id/prices`, ambos `@Public()` y con `ParseIntPipe` (`/abc` → 400). Registrado en `ShowtimeModule.controllers`. No hay dependencia circular: `MovieModule` importa `ShowtimeModule` y este no importa nada.

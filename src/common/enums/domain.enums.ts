@@ -78,12 +78,26 @@ export enum AgeRating {
   DIECIOCHO = '18+',
 }
 
-/** Tipo de butaca. Determina el recargo de precio, nunca el precio base. */
+/** Tipo de silla (HU-010). `PREFERENCIAL` se bloquea como cualquiera (RN-042 pendiente de políticas). */
 export enum SeatType {
-  ESTANDAR = 'estandar',
-  VIP = 'vip',
-  ACCESIBLE = 'accesible',
-  PAREJA = 'pareja',
+  ESTANDAR = 'ESTANDAR',
+  PREFERENCIAL = 'PREFERENCIAL',
+  VIP = 'VIP',
+}
+
+/** Estado persistido de una silla (HU-010). `SOLD` solo lo escribe el seed; el código nunca. */
+export enum SeatStatus {
+  AVAILABLE = 'AVAILABLE',
+  HELD = 'HELD',
+  SOLD = 'SOLD',
+  DISABLED = 'DISABLED',
+}
+
+/** Eventos de la auditoría de sillas (HU-010). */
+export enum SeatAuditEvent {
+  LOCKED = 'LOCKED',
+  RELEASED = 'RELEASED',
+  EXPIRED = 'EXPIRED',
 }
 
 /** Ciclo de vida de un ticket. */
