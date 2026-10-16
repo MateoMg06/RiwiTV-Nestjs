@@ -80,6 +80,7 @@
 - HU-006: `favoriteCinemaId` y `cityId` inexistentes no se validan en el registro (ver Pendientes).
 - HU-006: `POST /auth/register` responde `{ user, membership: { code, status }, activationToken? }` (el token solo fuera de producción). **Hay que avisar al frontend** del campo nuevo `membership`.
 - HU-006: el registro es transaccional (`DataSource.transaction`): usuario + membresía se crean juntos y el token de activación va en el mismo INSERT (se elimina el `userDao.update` posterior). Los chequeos previos (correo, documento) quedan fuera de la transacción.
+- HU-006: **correo emulado.** No hay servicio SMTP y el proyecto es educativo: `MailService` (`src/common/utils/mail.ts`, nodemailer, provider de `UtilsModule`) usa SMTP si `SMTP_HOST` está definido y, si no, el transporte integrado `jsonTransport` (sin red) y registra «Correo emulado» con destinatario y asunto; el enlace con token solo fuera de producción (`agent.md` §8). El correo es texto plano en español con `${FRONTEND_URL}/verify-email?token=…`. Se envía tras el commit de la transacción; si falla se loguea (sin token) y el registro no se revierte.
 
 ## Pendientes
 
@@ -140,12 +141,20 @@ No se implementa (no pertenece a HU-001 a HU-010):
 12. [ ] Swagger con datos de relleno y puerto 3000 fijo en el log.
 13. [ ] `tsconfig.build.tsbuildinfo` versionado.
 14. [x] `.env.example` con secretos que parecen reales (JWT, Observe, `SEED_API_KEY`): reemplazar y rotar.
-15. [ ] Email no implementado (nodemailer instalado sin uso).
+15. [x] Email no implementado (nodemailer instalado sin uso). Resuelto en HU-006 con `MailService` (correo de activación; emulado si no hay `SMTP_HOST`).
 16. [x] `agent.md` §2 y §4 dicen ESM / `import.meta.dirname`, pero desde `35c326d` el proyecto es CommonJS (`__dirname` es válido).
 17. [ ] HU-007 RN-030: el login no invalida el refresh token anterior; `Sessions` permite N sesiones simultáneas — `src/modules/auth/auth.service.ts`.
 18. [ ] HU-007: la respuesta de login no incluye membresía, beneficios ni datos del perfil — `src/modules/auth/auth.service.ts`.
 
 ## Registro de cambios
+
+### 2026-10-16 — feat(HU-006): correo de activación emulado (paso 4 de 6)
+- **Archivos:** `src/common/utils/{mail,mail.spec}.ts` (nuevos), `src/common/utils/utils.module.ts`, `src/config/config.keys.ts`, `.env.example`, `src/modules/auth/auth.service.ts`, `src/modules/auth/auth.service.spec.ts`, `memory.md`.
+- **Qué:** `MailService.sendActivation(to, name, token)` envía texto plano con el enlace `${FRONTEND_URL}/verify-email?token=…` (válido 24 h). Con `SMTP_HOST` usa SMTP (auth solo si hay `SMTP_USER`; `secure` si el puerto es 465); sin él usa `jsonTransport` y registra el envío como emulado. `UtilsModule` importa `ConfigModule` y exporta `MailService`. `AuthService.register` lo llama después de la transacción; si falla, registra el error sin token y devuelve el registro igualmente. Si la membresía falla no se envía correo.
+- **Por qué:** HU-006 (correo de activación); bug #15.
+- **Impacto:** variables de entorno nuevas, ya en `Config` y `.env.example`: `SMTP_HOST` (vacío = emulado), `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM`, `FRONTEND_URL`. Hay que añadirlas al `.env` local (son opcionales: sin ellas el correo se emula con valores por defecto). Sin dependencias nuevas (nodemailer ya estaba instalado).
+- **Verificación:** `npm run test` ✅ (298/298) · `npm run lint` ✅ · `npm run build` ✅.
+- **Pendiente derivado:** pasos 5 y 6. RN-020 (correo de estreno de HU-005) puede reutilizar `MailService`.
 
 ### 2026-10-16 — feat(HU-006): registro transaccional con membresía Activa (paso 3 de 6)
 - **Archivos:** `src/modules/user/{user.dao,user.service}.ts` y specs (`user.dao.spec.ts` nuevo), `src/modules/auth/{auth.service,auth.controller,auth.module}.ts`, `src/modules/auth/auth.service.spec.ts`, `memory.md`.

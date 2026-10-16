@@ -17,6 +17,7 @@ import { UserDao } from '../user/user.dao.js';
 import { RegisterDto } from './dto/register.dto.js';
 import { User } from '../user/user.entity.js';
 import { Bcrypt } from '../../common/utils/bcrypt.js';
+import { MailService } from '../../common/utils/mail.js';
 import { Jwt } from '../../common/utils/jwt.js';
 import { TokenExpiry } from '../../common/utils/token-expiry.js';
 import { ConfigService } from '../../config/config.service.js';
@@ -67,6 +68,7 @@ export class AuthService {
     private readonly captcha: Captcha,
     private readonly dataSource: DataSource,
     private readonly membershipService: MembershipService,
+    private readonly mail: MailService,
   ) {
     this.saltRounds = Number(process.env.SALT_ROUNDS ?? DEFAULT_SALT_ROUNDS);
     this.maxFailedAttempts = Number(
@@ -134,6 +136,15 @@ export class AuthService {
       const membership = await this.membershipService.createForUser(created.id, manager);
       return { user: created, membership };
     });
+
+    // Tras el commit: un fallo de envio se registra (sin token) pero no revierte el registro.
+    try {
+      await this.mail.sendActivation(user.email, user.name, activationToken);
+    } catch (error) {
+      this.logger.error(
+        `No se pudo enviar el correo de activacion a ${user.email}: ${(error as Error).message}`,
+      );
+    }
 
     const isProduction = process.env.NODE_ENV === 'production';
 

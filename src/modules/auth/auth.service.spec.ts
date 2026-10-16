@@ -3,6 +3,7 @@ import { BadRequestException, ForbiddenException, UnauthorizedException } from '
 import { AuthService } from './auth.service.js';
 import type { DataSource, EntityManager } from 'typeorm';
 import type { MembershipService } from '../membership/membership.service.js';
+import type { MailService } from '../../common/utils/mail.js';
 import type { AuthDao } from './auth.dao.js';
 import type { UserService } from '../user/user.service.js';
 import type { UserDao } from '../user/user.dao.js';
@@ -86,6 +87,7 @@ describe('AuthService', () => {
   let manager: EntityManager;
   let dataSource: DataSource;
   let membershipService: MembershipService;
+  let mail: MailService;
   let service: AuthService;
 
   beforeEach(() => {
@@ -141,6 +143,8 @@ describe('AuthService', () => {
         .mockResolvedValue({ code: 'RTV-0123456789', status: MembershipStatus.ACTIVE }),
     } as unknown as MembershipService;
 
+    mail = { sendActivation: vi.fn().mockResolvedValue(undefined) } as unknown as MailService;
+
     service = new AuthService(
       authDao,
       userService,
@@ -152,6 +156,7 @@ describe('AuthService', () => {
       captcha,
       dataSource,
       membershipService,
+      mail,
     );
   });
 
@@ -233,6 +238,43 @@ describe('AuthService', () => {
         status: MembershipStatus.ACTIVE,
       });
       expect(result.user).toMatchObject({ id: 5, email: 'ana@example.com' });
+    });
+
+    it('envia el correo de activacion tras la transaccion', async () => {
+      (userService.create as ReturnType<typeof vi.fn>).mockResolvedValue(buildUser());
+
+      const result = await service.register(buildRegisterDto());
+
+      expect(mail.sendActivation).toHaveBeenCalledWith(
+        'ana@example.com',
+        'Ana',
+        result.activationToken,
+      );
+      const txOrder = (dataSource.transaction as ReturnType<typeof vi.fn>).mock
+        .invocationCallOrder[0];
+      const mailOrder = (mail.sendActivation as ReturnType<typeof vi.fn>).mock
+        .invocationCallOrder[0];
+      expect(mailOrder).toBeGreaterThan(txOrder);
+    });
+
+    it('si el envio del correo falla, el registro igual termina bien', async () => {
+      (userService.create as ReturnType<typeof vi.fn>).mockResolvedValue(buildUser());
+      (mail.sendActivation as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('smtp caido'));
+
+      await expect(service.register(buildRegisterDto())).resolves.toMatchObject({
+        user: { id: 1 },
+        membership: { code: 'RTV-0123456789' },
+      });
+    });
+
+    it('si la membresia falla, no se envia correo', async () => {
+      (userService.create as ReturnType<typeof vi.fn>).mockResolvedValue(buildUser());
+      (membershipService.createForUser as ReturnType<typeof vi.fn>).mockRejectedValue(
+        new Error('sin membresia'),
+      );
+
+      await expect(service.register(buildRegisterDto())).rejects.toThrow();
+      expect(mail.sendActivation).not.toHaveBeenCalled();
     });
 
     it('si la membresia falla, el error se propaga (la transaccion revierte al usuario)', async () => {
