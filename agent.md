@@ -262,7 +262,7 @@ El original montaba cada ruta con prefijo `/api`, `/api/v1` y sin prefijo. **Nes
 | HU-007 | `POST /api/auth/login`, `/refresh`, `/logout` | ✅ (+ `logout-all`, `me`); el login audita en `AccessAudits` |
 | HU-007 | `POST /api/auth/forgot-password`, `/reset-password` | `POST /api/auth/forgot-password` y `/reset-password` (públicos, 200) implementados |
 | HU-008 | `/api/profile`, `/api/membership`, `/benefits` | `GET`/`PUT /api/profile`, `GET /api/membership`, `GET /api/membership/benefits` (JWT) implementados; el cambio de correo queda en `pendingEmail` hasta verificarlo |
-| HU-009 | `GET /api/functions/:id`, `/prices` | **No existe** |
+| HU-009 | `GET /api/functions/:id`, `/prices` | Implementados (públicos). `/prices` devuelve el precio de lista; solo funciones futuras, no canceladas, de película y cine activos (404 si no) |
 | HU-010 | `GET /api/functions/:id/seats`, `/api/reservations/...` | **No existe** |
 
 ### 5.2 Autenticación (HU-006, HU-007) en Nest
