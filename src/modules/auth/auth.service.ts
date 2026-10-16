@@ -52,7 +52,7 @@ const DEFAULT_REFRESH_TTL_MS = 604_800_000; // 7 dias
 /** Minutos que dura un bloqueo por intentos fallidos. */
 const LOCK_DURATION_MINUTES = 15;
 
-/** Vigencia por defecto del token JWT de restablecimiento de contrasena. */
+/** Vigencia por defecto del token de restablecimiento de contrasena. */
 const DEFAULT_RESET_EXPIRY = '1h';
 const DEFAULT_RESET_TTL_MS = 3_600_000; // 1 hora
 

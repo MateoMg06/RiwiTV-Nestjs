@@ -1,29 +1,11 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { CatalogQueryDto } from './catalog-query.dto.js';
-import {
-  AgeRating,
-  AudioType,
-  MovieStatus,
-  ShowFormat,
-  ShowtimeStatus,
-} from '../../common/enums/domain.enums.js';
+import { AgeRating, MovieStatus, ShowFormat } from '../../common/enums/domain.enums.js';
 import { ShowtimeDao } from '../showtime/showtime.dao.js';
-import type { Showtime } from '../showtime/showtime.entity.js';
+import { toShowtime, type WeeklyShowtime } from '../showtime/showtime.mapper.js';
 import { MovieDao } from './movie.dao.js';
 import type { Movie } from './movie.entity.js';
 import type { MovieCityQueryDto } from './movie-city-query.dto.js';
-
-export interface WeeklyShowtime {
-  id: number;
-  startsAt: Date;
-  format: ShowFormat;
-  language: string;
-  roomType: string;
-  audioType: AudioType;
-  status: ShowtimeStatus;
-  price: number;
-  cinema: { id: number; name: string };
-}
 
 export interface MovieBase {
   id: number;
@@ -56,18 +38,6 @@ export interface MovieDetail extends WeeklyMovie {
   languages: string[];
   prices: FormatPrice[];
 }
-
-const toShowtime = (showtime: Showtime): WeeklyShowtime => ({
-  id: showtime.id,
-  startsAt: showtime.startsAt,
-  format: showtime.format,
-  language: showtime.language,
-  roomType: showtime.roomType,
-  audioType: showtime.audioType,
-  status: showtime.status,
-  price: Number(showtime.price),
-  cinema: { id: showtime.cinema.id, name: showtime.cinema.name },
-});
 
 export interface UpcomingMovie extends MovieBase {
   synopsis: string;

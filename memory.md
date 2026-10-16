@@ -166,6 +166,12 @@ No se implementa (no pertenece a HU-001 a HU-010):
 
 ## Registro de cambios
 
+### 2026-10-16 — refactor(HU-009): mapper de funciones compartido (paso 1 de 4)
+- **Archivos:** `src/modules/showtime/showtime.mapper.ts` (nuevo), `src/modules/movie/movie.service.ts`, `src/modules/auth/auth.service.ts`, `memory.md`.
+- **Qué:** `WeeklyShowtime` y `toShowtime` pasan de `movie.service.ts` a `showtime.mapper.ts`; `MovieService` los importa. Sin cambio de comportamiento. Además, el comentario de `DEFAULT_RESET_EXPIRY` en `auth.service.ts` decía «token JWT de restablecimiento» pero el token es aleatorio (`randomBytes`) guardado como SHA-256; ahora dice «Vigencia por defecto del token de restablecimiento de contrasena.».
+- **Por qué:** HU-009 reutiliza el mapper en `ShowtimeService`.
+- **Impacto:** ninguno en API, BD ni variables de entorno.
+- **Verificación:** `npm run test` ✅ (417/417) · `npm run lint` ✅ · `npm run build` ✅
 ### 2026-10-16 — refactor(HU-008): limpieza de auth y cancelación de correo pendiente
 - **Archivos:** `src/modules/auth/auth.service.ts`, `src/modules/profile/profile.service.ts`, `src/modules/profile/profile.service.spec.ts`, `memory.md`.
 - **Qué:** (1) comentario huérfano sobre `DEFAULT_RESET_EXPIRY` reemplazado por uno correcto. (2) Se elimina el método privado `AuthService.hashToken`; se usa `hashToken` de `common/utils/token-hash.ts` directamente (los tests no lo espiaban). (3) `PUT /profile` con un `email` igual al actual (sin distinguir mayúsculas) y un `pendingEmail` previo cancela el cambio: `pendingEmail`, `activationToken` y `activationTokenExpires` pasan a `null`; sin `emailVerificationRequired` ni correo. Las cuentas INACTIVE no llegan aquí (PUT exige JWT y el login exige ACTIVE), así que no afecta la activación de registro.
