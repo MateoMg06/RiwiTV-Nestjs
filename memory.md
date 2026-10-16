@@ -177,6 +177,13 @@ No se implementa (no pertenece a HU-001 a HU-010):
 
 ## Registro de cambios
 
+### 2026-10-16 — feat(HU-010): `SeatDao` y `SeatAuditDao` (paso 3 de 6)
+- **Archivos:** `src/modules/reservation/seat.dao.ts`, `seat.dao.spec.ts`, `seat-audit.dao.ts`, `seat-audit.dao.spec.ts`, `memory.md`.
+- **Qué:** `SeatDao`: `findByShowtime`, `findForUpdate` (`pessimistic_write`, filtra función + ids, `ORDER BY id` para fijar el orden de locks), `hold`, `renewHeldByUser` (solo `HELD` vigentes propias; devuelve ids con `RETURNING`), `countHeldByUser`, `findHeldByUser`, `releaseByUser` (solo `HELD` propias, nunca `SOLD`/`DISABLED`; `ids` opcional; devuelve ids liberados), `releaseExpired` (`SELECT ... FOR UPDATE` de `HELD` con `heldUntil <= now`, luego `UPDATE` a `AVAILABLE`; devuelve `{ seatId, showtimeId, userId }` con el dueño previo). `SeatAuditDao.createMany(manager, rows)`. Las escrituras reciben el `EntityManager` del service; ningún DAO abre transacciones.
+- **Por qué:** HU-010, acceso a datos con concurrencia correcta.
+- **Impacto:** ninguno todavía en la API. Los tests de DAO usan dobles del query builder: el SQL real (`FOR UPDATE`, `RETURNING`) no se ha ejecutado contra Postgres en este entorno (sin BD).
+- **Verificación:** `npm run test` ✅ (447/447) · `npm run lint` ✅ · `npm run build` ✅
+- **Pendiente derivado:** service, DTOs y controllers (paso 4).
 ### 2026-10-16 — feat(HU-010): entidades `Seat` y `SeatAudit` (paso 2 de 6)
 - **Archivos:** `src/modules/reservation/seat.entity.ts`, `src/modules/reservation/seat-audit.entity.ts`, `src/database.ts`, `memory.md`.
 - **Qué:** tabla `Seats` (FK `showtimeId` con `ON DELETE CASCADE`, `row` varchar(2), `number`, `type`, `status` default `AVAILABLE`, `priceModifier` decimal(12,2), `heldByUserId`, `heldUntil` timestamptz; único `(showtimeId, row, number)`; índice `(status, heldUntil)`). Tabla `SeatAudits` con columnas planas sin FK (`userId` nullable, `showtimeId`, `seatId`, `event`, `createdAt`) e índice por `showtimeId`. Ambas registradas en `typeOrmOptions.entities`.
