@@ -7,7 +7,7 @@
 
 | Área | Estado | Notas |
 |---|---|---|
-| Auth: captcha | Implementado, con bug | Devuelve la respuesta al cliente (ver Bugs #1) |
+| Auth: captcha | Implementado | Devuelve solo `{ token, question }` |
 | Auth: registro + activación | Implementado | Cuenta nace INACTIVA; token 24 h; sin envío de correo aún (nodemailer instalado, no usado) |
 | Auth: login | Implementado | Bloqueo 15 min tras `MAX_FAILED_ATTEMPTS`; hash ficticio anti-enumeración |
 | Auth: refresh con rotación | Implementado | Cookie `refresh_token` con path `/api/auth` |
@@ -50,7 +50,7 @@
 
 ## Bugs conocidos
 
-1. [ ] `GET /auth/captcha` expone `answer` — `src/modules/auth/auth.controller.ts`, `src/common/utils/captcha.ts`.
+1. [x] `GET /auth/captcha` expone `answer` — `src/modules/auth/auth.controller.ts`, `src/common/utils/captcha.ts`.
 2. [x] Cookie `refresh_token` con `path: '/auth'` pero la ruta real es `/api/auth` — `auth.controller.ts`.
 3. [x] `revokedAt: undefined` no filtra en TypeORM; usar `IsNull()` — `src/modules/auth/auth.dao.ts`.
 4. [ ] `__dirname` en ESM — `src/config/config.service.ts`.
@@ -67,6 +67,14 @@
 15. [ ] Email no implementado (nodemailer instalado sin uso).
 
 ## Registro de cambios
+
+### 2026-10-15 — fix: el captcha no expone la respuesta y se reparan los specs de servicios
+- **Archivos:** `src/common/utils/captcha.ts`, `src/modules/auth/auth.service.spec.ts`, `src/modules/user/user.service.spec.ts`
+- **Qué:** `CaptchaChallenge` ya no incluye `answer`; `GET /auth/captcha` devuelve `{ token, question }`. Los specs fallaban desde `ca1a330` (15 tests): `UserService` no recibía `Password` y `register` no enviaba captcha. Se añaden tests de captcha ausente, incorrecto y de que no se expone la respuesta.
+- **Por qué:** Bug #1 y suite en rojo.
+- **Impacto:** contrato de `GET /api/auth/captcha` (sin `answer`).
+- **Verificación:** `npm run test` ✅ (104/104) · `npm run lint` ✅ · `npm run build` ✅ (ejecutados sobre el conjunto de arreglos de esta sesión).
+- **Pendiente derivado:** ninguno.
 
 ### 2026-10-15 — fix: `IsNull()` para filtrar sesiones no revocadas
 - **Archivos:** `src/modules/auth/auth.dao.ts`, `src/modules/auth/auth.dao.spec.ts`

@@ -1,10 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import crypto from 'crypto';
 
+/**
+ * Lo que recibe el cliente. La respuesta NO viaja: solo vive en `captchaStore`.
+ * Si se devolviera, cualquier bot la leeria y el captcha no protegeria nada.
+ */
 export interface CaptchaChallenge {
   token: string;
   question: string;
-  answer: number;
 }
 
 @Injectable()
@@ -46,7 +49,6 @@ export class Captcha{
     return {
       token,
       question,
-      answer,
     };
   }
 

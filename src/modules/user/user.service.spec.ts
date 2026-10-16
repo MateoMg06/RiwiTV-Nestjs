@@ -6,6 +6,7 @@ import type { CreateUserDto } from './create-user.dto.js';
 import type { UpdateUserDto } from './update-user.dto.js';
 import type { User } from './user.entity.js';
 import { Bcrypt } from '../../common/utils/bcrypt.js';
+import { Password } from '../../common/utils/password.js';
 import { UserRole } from '../../common/enums/domain.enums.js';
 
 /**
@@ -64,7 +65,7 @@ describe('UserService', () => {
     } as unknown as UserDao;
 
     bcrypt = new Bcrypt();
-    service = new UserService(userDao, bcrypt);
+    service = new UserService(userDao, bcrypt, new Password());
   });
 
   afterEach(() => {
@@ -157,7 +158,7 @@ describe('UserService', () => {
 
     it('respeta SALT_ROUNDS del entorno', async () => {
       vi.stubEnv('SALT_ROUNDS', '4');
-      const cheap = new UserService(userDao, new Bcrypt());
+      const cheap = new UserService(userDao, new Bcrypt(), new Password());
       (userDao.create as ReturnType<typeof vi.fn>).mockResolvedValue(buildUser());
 
       await cheap.create(buildCreateDto());

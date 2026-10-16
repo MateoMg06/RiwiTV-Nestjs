@@ -11,6 +11,7 @@ import { Bcrypt } from '../../common/utils/bcrypt.js';
 import { Jwt } from '../../common/utils/jwt.js';
 import { TokenExpiry } from '../../common/utils/token-expiry.js';
 import { ConfigService } from '../../config/config.service.js';
+import { Captcha } from '../../common/utils/captcha.js';
 import { Config } from '../../config/config.keys.js';
 import { AccountStatus, UserRole } from '../../common/enums/domain.enums.js';
 
@@ -66,6 +67,8 @@ const buildRegisterDto = (overrides: Partial<RegisterDto> = {}): RegisterDto =>
     acceptsDataProcessing: true,
     acceptsTerms: true,
     acceptsNotifications: false,
+    captchaToken: 'captcha-token',
+    captchaAnswer: 7,
     ...overrides,
   }) as RegisterDto;
 
@@ -77,6 +80,7 @@ describe('AuthService', () => {
   let jwt: Jwt;
   let tokenExpiry: TokenExpiry;
   let configService: ConfigService;
+  let captcha: Captcha;
   let service: AuthService;
 
   beforeEach(() => {
@@ -110,6 +114,8 @@ describe('AuthService', () => {
 
     tokenExpiry = new TokenExpiry();
 
+    captcha = { verifyCaptcha: vi.fn().mockReturnValue(true) } as unknown as Captcha;
+
     configService = {
       get: vi.fn((key: string) => {
         const map: Record<string, string> = {
@@ -128,10 +134,48 @@ describe('AuthService', () => {
       jwt,
       tokenExpiry,
       configService,
+      captcha,
     );
   });
 
+  describe('getCaptcha', () => {
+    it('no expone la respuesta al cliente', async () => {
+      const real = new AuthService(
+        authDao,
+        userService,
+        userDao,
+        bcrypt,
+        jwt,
+        tokenExpiry,
+        configService,
+        new Captcha(),
+      );
+
+      const challenge = await real.getCaptcha();
+
+      expect(challenge).toEqual({ token: expect.any(String), question: expect.any(String) });
+      expect(challenge).not.toHaveProperty('answer');
+    });
+  });
+
   describe('register', () => {
+    it('exige el captcha antes de crear el usuario', async () => {
+      await expect(
+        service.register(buildRegisterDto({ captchaToken: undefined })),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(userService.create).not.toHaveBeenCalled();
+    });
+
+    it('rechaza una respuesta de captcha incorrecta', async () => {
+      (captcha.verifyCaptcha as ReturnType<typeof vi.fn>).mockReturnValue(false);
+
+      await expect(service.register(buildRegisterDto())).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+      expect(captcha.verifyCaptcha).toHaveBeenCalledWith('captcha-token', 7);
+      expect(userService.create).not.toHaveBeenCalled();
+    });
+
     it('fuerza el rol USUARIO aunque el cliente intente enviar otro', async () => {
       (userService.create as ReturnType<typeof vi.fn>).mockResolvedValue(buildUser());
 
