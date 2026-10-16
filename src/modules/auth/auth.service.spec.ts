@@ -411,6 +411,40 @@ describe('AuthService', () => {
       ).rejects.toBeInstanceOf(ForbiddenException);
     });
 
+    it('RN-030: un login correcto revoca las sesiones previas antes de crear la nueva', async () => {
+      vi.spyOn(bcrypt, 'comparePassword').mockResolvedValue(true);
+      const user = buildUser();
+      (userDao.findByEmailWithPassword as ReturnType<typeof vi.fn>).mockResolvedValue(user);
+      (userDao.update as ReturnType<typeof vi.fn>).mockResolvedValue(user);
+      (authDao.createSession as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+
+      await service.login({ email: 'ana@example.com', password: 'la-correcta' });
+
+      expect(authDao.revokeAllSessions).toHaveBeenCalledTimes(1);
+      expect(authDao.revokeAllSessions).toHaveBeenCalledWith(1);
+      const revokeOrder = (authDao.revokeAllSessions as ReturnType<typeof vi.fn>).mock
+        .invocationCallOrder[0];
+      const createOrder = (authDao.createSession as ReturnType<typeof vi.fn>).mock
+        .invocationCallOrder[0];
+      expect(revokeOrder).toBeLessThan(createOrder);
+    });
+
+    it('RN-030: un login fallido o con cuenta inactiva no revoca sesiones', async () => {
+      const user = buildUser();
+      (userDao.findByEmailWithPassword as ReturnType<typeof vi.fn>).mockResolvedValue(user);
+      (userDao.update as ReturnType<typeof vi.fn>).mockResolvedValue(user);
+
+      await service.login({ email: 'ana@example.com', password: 'mala' }).catch(() => {});
+
+      vi.spyOn(bcrypt, 'comparePassword').mockResolvedValue(true);
+      (userDao.findByEmailWithPassword as ReturnType<typeof vi.fn>).mockResolvedValue(
+        buildUser({ accountStatus: AccountStatus.INACTIVE }),
+      );
+      await service.login({ email: 'ana@example.com', password: 'ok' }).catch(() => {});
+
+      expect(authDao.revokeAllSessions).not.toHaveBeenCalled();
+    });
+
     it('impide iniciar sesion a una cuenta bloqueada', async () => {
       vi.spyOn(bcrypt, 'comparePassword').mockResolvedValue(true);
 

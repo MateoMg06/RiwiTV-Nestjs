@@ -219,6 +219,10 @@ export class AuthService {
       lastLoginAttemptAt: new Date(),
     });
 
+    // RN-030: una sola sesion viva. Se revocan las previas antes de emitir las nuevas
+    // (aqui y no en `issueTokens`, que tambien usa `refresh` y ya revoca la suya).
+    await this.authDao.revokeAllSessions(user.id);
+
     return this.issueTokens(user, context);
   }
 

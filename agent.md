@@ -269,14 +269,13 @@ El original montaba cada ruta con prefijo `/api`, `/api/v1` y sin prefijo. **Nes
 
 - Access token: `JWT_SECRET`, 15 min, payload `{ sub, id, email, role }`. Cookie **`accessToken`** (path `/`).
 - Refresh token: `JWT_REFRESH_SECRET` (distinto), 7 d, payload `{ sub, typ: 'refresh' }`. Cookie `refresh_token` (path `/api/auth`). Rotación; reutilización ⇒ revoca todas las sesiones.
-- Tabla `Sessions`: N sesiones por usuario con IP y user-agent (equivale a `RefreshToken` del original).
+- Tabla `Sessions`: una sesión viva por usuario (cada login revoca las previas, RN-030), con IP y user-agent (equivale a `RefreshToken` del original).
 - Login: bloqueo 15 min tras `MAX_FAILED_ATTEMPTS`; hash ficticio contra enumeración por tiempo.
 
 ### 5.3 Conflictos entre el backlog y el código Nest actual (corregir)
 
 | Regla | Backlog | Nest hoy |
 |---|---|---|
-| RN-030 (HU-007) | Cada login invalida el refresh token anterior | Permite N sesiones simultáneas (`Sessions`) |
 | HU-007 | El login devuelve también membresía, beneficios y datos del perfil | Solo tokens y `AuthUser` |
 | HU-010 | Máximo de sillas configurable **por función** | No existe (el original usaba `MAX_SEATS_PER_RESERVATION` global) |
 

@@ -14,7 +14,7 @@
 | HU-004 | Completa salvo prueba manual | Columnas nuevas en `Movie` (`synopsis`, `cast`, `bannerUrl`, `trailerUrl`) y `Showtime.price`; `GET /movies/:id` (detalle con `formats`, `languages`, `prices` y `showtimes` futuras), `GET /movies/:id/functions`, `GET /movies/:id/recommendations` (públicos, `?cityId=` opcional en detalle y funciones); `MovieDao`; seed ampliado con `refresh` | Prueba manual contra Postgres |
 | HU-005 | Completa salvo prueba manual | Entidad `ReleaseNotification` (tabla `ReleaseNotifications`, único `(userId, movieId)`); `GET /movies/upcoming` y `/movies/upcoming/:id` (públicos, orden por fecha, `daysUntilRelease`); `POST /notifications/upcoming` (JWT, 201, sin duplicados RN-019); seed con estrenos próximos y uno vencido; RN-020: `ReleaseNotificationJob` (cada hora) envía el correo (emulado sin `SMTP_HOST`) a las solicitudes `PENDING` de películas `ACTIVE` y las pasa a `SENT` | Prueba manual contra Postgres |
 | HU-006 | Completa salvo prueba manual | Captcha, registro transaccional (usuario + membresía **Activa** con código `RTV-XXXXXXXXXX`), BCrypt, contraseña ≥10 con complejidad (DTO y validador), `gender`/`favoriteCinemaId`, correo de activación (emulado sin `SMTP_HOST`), `POST /auth/verify-email` (+ alias `/activate`), `POST /membership/create` (JWT) | Prueba manual contra Postgres. El perfil es solo `User` (sin Profile, historial, billetera ni preferencias: decisión de la persona) |
-| HU-007 | Parcial | JWT 15 min, refresh 7 d en BD con rotación, logout, bloqueo 15 min tras intentos, solo cuentas activas, cookies | Invalidar el refresh anterior en cada login (RN-030); respuesta de login con membresía, beneficios y perfil; forgot/reset password; auditoría de accesos con IP y dispositivo |
+| HU-007 | Parcial | JWT 15 min, refresh 7 d en BD con rotación, logout, bloqueo 15 min tras intentos, solo cuentas activas, cookies | respuesta de login con membresía, beneficios y perfil; forgot/reset password; auditoría de accesos con IP y dispositivo |
 | HU-008 | No iniciada | — | `GET`/`PUT /profile`, `GET /membership`, `/membership/benefits`: QR único, nivel, descuentos por nivel, bonos, historial de compras, reservas activas, preferencias; cambio de correo con nueva validación (RN-034) |
 | HU-009 | No iniciada | — | `GET /functions/:id` y `/prices`; solo funciones activas y no iniciadas; precio según formato, sala y horario |
 | HU-010 | No iniciada | — | Seat y SeatLock con 7 estados; mapa de sillas; bloqueo transaccional 10 min; liberación manual y automática; máximo por función; auditoría de bloqueos y liberaciones; resumen con total |
@@ -31,7 +31,7 @@
 - **El backlog (`docs/historias-de-usuario.md`) manda sobre el código original.**
 - Rutas bajo `/api` sin versión; `/api/v1` solo para el health check (la API versionada es HU-029, fuera de alcance).
 - La membresía nace **Activa** al registrarse (backlog HU-006), no `pending` como en el original.
-- Sesiones en tabla `Sessions` (N por usuario), refresh token guardado como SHA-256.
+- Sesiones en tabla `Sessions` (**una sesión viva por usuario**, RN-030: cada login revoca las previas; decisión de la persona, 2026-10-16), refresh token guardado como SHA-256. Los access tokens previos siguen válidos hasta 15 min (son JWT sin consulta a BD): **avisar al frontend** de que un login en otro dispositivo cierra la sesión del anterior al renovar (`refresh` → 401).
 - Refresh firmado con secreto distinto al access; refresh sin rol ni email.
 - El rol nunca se acepta del cliente en `UserService.create/update`; registro público usa `RegisterDto` sin `role`.
 - `cityId` numérico en lugar de nombre de ciudad en el usuario.
@@ -147,10 +147,18 @@ No se implementa (no pertenece a HU-001 a HU-010):
 14. [x] `.env.example` con secretos que parecen reales (JWT, Observe, `SEED_API_KEY`): reemplazar y rotar.
 15. [x] Email no implementado (nodemailer instalado sin uso). Resuelto en HU-006 con `MailService` (correo de activación; emulado si no hay `SMTP_HOST`).
 16. [x] `agent.md` §2 y §4 dicen ESM / `import.meta.dirname`, pero desde `35c326d` el proyecto es CommonJS (`__dirname` es válido).
-17. [ ] HU-007 RN-030: el login no invalida el refresh token anterior; `Sessions` permite N sesiones simultáneas — `src/modules/auth/auth.service.ts`.
+17. [x] HU-007 RN-030: el login no invalida el refresh token anterior; `Sessions` permite N sesiones simultáneas — `src/modules/auth/auth.service.ts`. Resuelto: `login()` llama a `revokeAllSessions` antes de emitir tokens.
 18. [ ] HU-007: la respuesta de login no incluye membresía, beneficios ni datos del perfil — `src/modules/auth/auth.service.ts`.
 
 ## Registro de cambios
+
+### 2026-10-16 — fix(HU-007): RN-030, cada login revoca las sesiones previas (bug #17, paso 1 de 6)
+- **Archivos:** `src/modules/auth/auth.service.ts`, `src/modules/auth/auth.service.spec.ts`, `src/modules/auth/entities/session.entity.ts` (JSDoc), `agent.md` (§5.2, §5.3), `memory.md`.
+- **Qué:** tras el `update` de éxito y antes de `issueTokens`, `login()` hace `authDao.revokeAllSessions(user.id)`. No va dentro de `issueTokens` porque `refresh` ya revoca su propia sesión. `logout-all` no cambia. El JSDoc de `Session` ya no habla de N sesiones.
+- **Por qué:** RN-030 (cada login invalida el refresh anterior). Decisión de la persona: una sola sesión viva por usuario.
+- **Impacto:** un login en otro dispositivo deja sin refresh al anterior (401 al renovar); sus access tokens siguen válidos hasta 15 min. Avisar al frontend. Sin variables nuevas.
+- **Verificación:** `npm run test` ✅ (320/320) · `npm run lint` ✅ · `npm run build` ✅.
+- **Pendiente derivado:** pasos 2 a 6.
 
 ### 2026-10-16 — chore(HU-001): imagen Node 22 y comentario de `NotificationStatus`
 - **Archivos:** `Dockerfile`, `agent.md` (§2: Node 22), `src/common/enums/domain.enums.ts`, `memory.md`.

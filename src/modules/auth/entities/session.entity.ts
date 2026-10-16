@@ -11,18 +11,12 @@ import {
 import { User } from '../../user/user.entity.js';
 
 /**
- * Sesion activa de un usuario.
+ * Sesion de un usuario (RN-030: una sola sesion viva por usuario).
  *
- * DECISION DE DISENO (la razon de separar esto del User):
- * Un usuario puede estar conectado simultaneamente en movil, laptop y TV.
- * Guardar un unico par access/refreshToken en la fila de User hace que el
- * segundo login pise al primero y que "cerrar sesion" sea ambiguo.
- *
- * Con esta tabla:
- *  - N sesiones por usuario, cada una con su propio refresh token.
- *  - "Cerrar sesion en todos los dispositivos" = revocar todas sus filas.
- *  - Detectar robo de token: la fila registra desde que IP y que user-agent
- *    nacieron, datos que no tienen sentido a nivel de cuenta.
+ * Cada login exitoso revoca las sesiones previas (`AuthService.login`); `logout-all` las
+ * revoca todas. La tabla conserva las filas revocadas, cada una con su propio refresh token,
+ * la IP y el user-agent con los que nacio: sirve para detectar la reutilizacion de un token
+ * robado (la fila ya revocada) y no tiene sentido a nivel de cuenta.
  *
  * SEGURIDAD: se almacena el HASH del refresh token, no el token en claro.
  * Si alguien lee la tabla (backup, SQL injection, acceso indebido) no puede
