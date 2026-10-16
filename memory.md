@@ -177,6 +177,13 @@ No se implementa (no pertenece a HU-001 a HU-010):
 
 ## Registro de cambios
 
+### 2026-10-16 — feat(HU-010): entidades `Seat` y `SeatAudit` (paso 2 de 6)
+- **Archivos:** `src/modules/reservation/seat.entity.ts`, `src/modules/reservation/seat-audit.entity.ts`, `src/database.ts`, `memory.md`.
+- **Qué:** tabla `Seats` (FK `showtimeId` con `ON DELETE CASCADE`, `row` varchar(2), `number`, `type`, `status` default `AVAILABLE`, `priceModifier` decimal(12,2), `heldByUserId`, `heldUntil` timestamptz; único `(showtimeId, row, number)`; índice `(status, heldUntil)`). Tabla `SeatAudits` con columnas planas sin FK (`userId` nullable, `showtimeId`, `seatId`, `event`, `createdAt`) e índice por `showtimeId`. Ambas registradas en `typeOrmOptions.entities`.
+- **Por qué:** HU-010, modelo de sillas y auditoría.
+- **Impacto:** dos tablas nuevas creadas por `synchronize`. Sin cambios de API.
+- **Verificación:** `npm run test` ✅ (435/435) · `npm run lint` ✅ · `npm run build` ✅
+- **Pendiente derivado:** DAOs (paso 3).
 ### 2026-10-16 — feat(HU-010): enums de sillas, configuración y máximo por función (paso 1 de 6)
 - **Archivos:** `src/common/enums/domain.enums.ts`, `src/config/config.keys.ts`, `.env.example`, `src/modules/showtime/showtime.entity.ts`, `memory.md`.
 - **Qué:** `SeatType` (sin uso) se reemplaza por `{ ESTANDAR, PREFERENCIAL, VIP }`; nuevos `SeatStatus { AVAILABLE, HELD, SOLD, DISABLED }` y `SeatAuditEvent { LOCKED, RELEASED, EXPIRED }`. `Config.SEAT_LOCK_MINUTES` (default 10) y `Config.MAX_SEATS_PER_RESERVATION` (default 8), ambos en `.env.example`. Columna `Showtimes.maxSeatsPerReservation` (int, nullable; la crea `synchronize`).

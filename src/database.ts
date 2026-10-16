@@ -16,6 +16,8 @@ import { MovieModule } from './modules/movie/movie.module.js';
 import { Showtime } from './modules/showtime/showtime.entity.js';
 import { ReleaseNotification } from './modules/notification/release-notification.entity.js';
 import { Membership as MembershipEntity } from './modules/membership/membership.entity.js';
+import { Seat } from './modules/reservation/seat.entity.js';
+import { SeatAudit } from './modules/reservation/seat-audit.entity.js';
 import { NotificationModule } from './modules/notification/notification.module.js';
 
 /** Opciones de conexión, compartidas por la app y por `seeders/seed.ts`. */
@@ -38,6 +40,8 @@ export const typeOrmOptions: DataSourceOptions = {
     Showtime,
     ReleaseNotification,
     MembershipEntity,
+    Seat,
+    SeatAudit,
   ],
   synchronize: true,
   migrations: [`${path.dirname(__filename)}/migrations/*{.ts,.js}`],
