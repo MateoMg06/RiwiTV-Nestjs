@@ -55,6 +55,18 @@ export class MailService {
     await this.deliver(to, subject, text, `, enlace ${link}`);
   }
 
+  /** Correo con el enlace para restablecer la contraseña (HU-007). Lanza si el envío falla. */
+  async sendPasswordReset(to: string, name: string, token: string): Promise<void> {
+    const subject = 'Restablece tu contraseña de RiwiTV';
+    const link = `${this.frontendUrl}/reset-password?token=${token}`;
+    const text =
+      `Hola ${name},\n\n` +
+      `Recibimos una solicitud para restablecer tu contraseña. Abre este enlace:\n${link}\n\n` +
+      'El enlace caduca pronto y solo sirve una vez. Si no lo pediste, ignora este correo.';
+
+    await this.deliver(to, subject, text, `, enlace ${link}`);
+  }
+
   /** Aviso de que un próximo estreno ya está en cartelera (RN-020). Lanza si el envío falla. */
   async sendReleaseNotice(to: string, name: string, movieTitle: string): Promise<void> {
     const subject = `${movieTitle} ya está en cartelera`;

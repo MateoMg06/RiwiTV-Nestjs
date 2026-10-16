@@ -31,3 +31,23 @@ describe('UserDao.create (HU-006)', () => {
     expect(dataSource.getRepository).not.toHaveBeenCalled();
   });
 });
+
+describe('UserDao.findByResetTokenHash (HU-007)', () => {
+  it('selecciona resetToken y resetTokenExpires (select: false) y filtra por el hash', async () => {
+    const found = { id: 1 };
+    const qb = {
+      addSelect: vi.fn().mockReturnThis(),
+      where: vi.fn().mockReturnThis(),
+      getOne: vi.fn().mockResolvedValue(found),
+    };
+    const dataSource = {
+      getRepository: vi.fn().mockReturnValue({ createQueryBuilder: vi.fn().mockReturnValue(qb) }),
+    } as unknown as DataSource;
+
+    await expect(new UserDao(dataSource).findByResetTokenHash('abc')).resolves.toBe(found);
+
+    expect(qb.addSelect).toHaveBeenCalledWith('user.resetToken');
+    expect(qb.addSelect).toHaveBeenCalledWith('user.resetTokenExpires');
+    expect(qb.where).toHaveBeenCalledWith('user.resetToken = :hash', { hash: 'abc' });
+  });
+});

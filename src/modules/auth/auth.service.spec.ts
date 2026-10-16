@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { BadRequestException, ForbiddenException, UnauthorizedException } from '@nestjs/common';
+import { createHash } from 'crypto';
 import { AuthService } from './auth.service.js';
 import type { DataSource, EntityManager } from 'typeorm';
 import type { MembershipService } from '../membership/membership.service.js';
@@ -15,6 +16,7 @@ import { Jwt } from '../../common/utils/jwt.js';
 import { TokenExpiry } from '../../common/utils/token-expiry.js';
 import { ConfigService } from '../../config/config.service.js';
 import { Captcha } from '../../common/utils/captcha.js';
+import { Password } from '../../common/utils/password.js';
 import { Config } from '../../config/config.keys.js';
 import { AccountStatus, MembershipStatus, UserRole } from '../../common/enums/domain.enums.js';
 
@@ -109,6 +111,8 @@ describe('AuthService', () => {
     userDao = {
       findByEmailWithPassword: vi.fn(),
       findByActivationToken: vi.fn(),
+      findByEmail: vi.fn(),
+      findByResetTokenHash: vi.fn(),
       update: vi.fn(),
     } as unknown as UserDao;
 
@@ -144,7 +148,10 @@ describe('AuthService', () => {
       findByUserId: vi.fn().mockResolvedValue(null),
     } as unknown as MembershipService;
 
-    mail = { sendActivation: vi.fn().mockResolvedValue(undefined) } as unknown as MailService;
+    mail = {
+      sendActivation: vi.fn().mockResolvedValue(undefined),
+      sendPasswordReset: vi.fn().mockResolvedValue(undefined),
+    } as unknown as MailService;
 
     service = new AuthService(
       authDao,
@@ -158,6 +165,7 @@ describe('AuthService', () => {
       dataSource,
       membershipService,
       mail,
+      new Password(),
     );
   });
 
@@ -572,6 +580,143 @@ describe('AuthService', () => {
       await expect(
         service.login({ email: 'ana@example.com', password: 'la-correcta' }),
       ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+  });
+
+  describe('forgotPassword', () => {
+    const MESSAGE =
+      'Si el correo está registrado, recibirás instrucciones para restablecer tu contraseña';
+    const sha256 = (v: string) => createHash('sha256').update(v).digest('hex');
+
+    it('guarda el SHA-256 del token (no el token) con vigencia de 1 h y envia el token por correo', async () => {
+      (userDao.findByEmail as ReturnType<typeof vi.fn>).mockResolvedValue(buildUser());
+      const before = Date.now();
+
+      await expect(service.forgotPassword('ana@example.com')).resolves.toEqual({
+        message: MESSAGE,
+      });
+
+      const patch = (userDao.update as ReturnType<typeof vi.fn>).mock.calls[0][1];
+      const sent = (mail.sendPasswordReset as ReturnType<typeof vi.fn>).mock.calls[0];
+      expect(sent[0]).toBe('ana@example.com');
+      expect(sent[2]).toMatch(/^[0-9a-f]{64}$/);
+      expect(patch.resetToken).toBe(sha256(sent[2]));
+      expect(patch.resetToken).not.toBe(sent[2]);
+      const ttl = (patch.resetTokenExpires as Date).getTime() - before;
+      expect(Math.abs(ttl - 3_600_000)).toBeLessThan(5_000);
+    });
+
+    it('correo inexistente: misma respuesta, sin guardar ni enviar', async () => {
+      (userDao.findByEmail as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+
+      await expect(service.forgotPassword('nadie@example.com')).resolves.toEqual({
+        message: MESSAGE,
+      });
+
+      expect(userDao.update).not.toHaveBeenCalled();
+      expect(mail.sendPasswordReset).not.toHaveBeenCalled();
+    });
+
+    it('cuenta inactiva: misma respuesta, sin guardar ni enviar', async () => {
+      (userDao.findByEmail as ReturnType<typeof vi.fn>).mockResolvedValue(
+        buildUser({ accountStatus: AccountStatus.INACTIVE }),
+      );
+
+      await expect(service.forgotPassword('ana@example.com')).resolves.toEqual({
+        message: MESSAGE,
+      });
+
+      expect(userDao.update).not.toHaveBeenCalled();
+      expect(mail.sendPasswordReset).not.toHaveBeenCalled();
+    });
+
+    it('si el correo falla, responde igual y no registra el token', async () => {
+      (userDao.findByEmail as ReturnType<typeof vi.fn>).mockResolvedValue(buildUser());
+      (mail.sendPasswordReset as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('smtp'));
+      const error = vi.spyOn(service['logger'], 'error').mockImplementation(() => undefined);
+
+      await expect(service.forgotPassword('ana@example.com')).resolves.toEqual({
+        message: MESSAGE,
+      });
+      await new Promise((r) => setImmediate(r));
+
+      const token = (mail.sendPasswordReset as ReturnType<typeof vi.fn>).mock.calls[0][2];
+      expect(error).toHaveBeenCalledTimes(1);
+      expect(String(error.mock.calls[0][0])).not.toContain(token);
+    });
+  });
+
+  describe('resetPassword', () => {
+    const TOKEN = 'a'.repeat(64);
+    const dto = { token: TOKEN, password: 'NuevaClave1!', confirmPassword: 'NuevaClave1!' };
+    const withToken = (overrides: Partial<User> = {}) =>
+      buildUser({
+        resetToken: 'x',
+        resetTokenExpires: new Date(Date.now() + 60_000),
+        ...overrides,
+      });
+
+    it('rechaza si las contraseñas no coinciden', async () => {
+      await expect(service.resetPassword({ ...dto, confirmPassword: 'otra' })).rejects.toThrow(
+        'Contraseñas no coinciden',
+      );
+      expect(userDao.findByResetTokenHash).not.toHaveBeenCalled();
+    });
+
+    it('rechaza una contraseña débil', async () => {
+      const weak = { ...dto, password: 'sinmayusculas1!', confirmPassword: 'sinmayusculas1!' };
+
+      await expect(service.resetPassword(weak)).rejects.toThrow(
+        'La contraseña no cumple con los parámetros requeridos',
+      );
+    });
+
+    it('rechaza un token desconocido, buscándolo por su SHA-256', async () => {
+      (userDao.findByResetTokenHash as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+
+      await expect(service.resetPassword(dto)).rejects.toThrow(
+        'Token de restablecimiento inválido o expirado',
+      );
+      expect(userDao.findByResetTokenHash).toHaveBeenCalledWith(
+        createHash('sha256').update(TOKEN).digest('hex'),
+      );
+    });
+
+    it('rechaza un token expirado', async () => {
+      (userDao.findByResetTokenHash as ReturnType<typeof vi.fn>).mockResolvedValue(
+        withToken({ resetTokenExpires: new Date(Date.now() - 1_000) }),
+      );
+
+      await expect(service.resetPassword(dto)).rejects.toThrow(
+        'Token de restablecimiento inválido o expirado',
+      );
+      expect(userDao.update).not.toHaveBeenCalled();
+    });
+
+    it('guarda bcrypt, anula el token y revoca todas las sesiones', async () => {
+      (userDao.findByResetTokenHash as ReturnType<typeof vi.fn>).mockResolvedValue(withToken());
+
+      await expect(service.resetPassword(dto)).resolves.toEqual({
+        message: 'Contraseña actualizada',
+      });
+
+      const patch = (userDao.update as ReturnType<typeof vi.fn>).mock.calls[0][1];
+      expect(patch.password).not.toBe(dto.password);
+      expect(await bcrypt.comparePassword(dto.password, patch.password)).toBe(true);
+      expect(patch.resetToken).toBeNull();
+      expect(patch.resetTokenExpires).toBeNull();
+      expect(patch).not.toHaveProperty('lockedUntil');
+      expect(authDao.revokeAllSessions).toHaveBeenCalledWith(1);
+    });
+
+    it('reutilizar el token (ya anulado) da 400', async () => {
+      (userDao.findByResetTokenHash as ReturnType<typeof vi.fn>)
+        .mockResolvedValueOnce(withToken())
+        .mockResolvedValueOnce(null);
+
+      await service.resetPassword(dto);
+
+      await expect(service.resetPassword(dto)).rejects.toBeInstanceOf(BadRequestException);
     });
   });
 

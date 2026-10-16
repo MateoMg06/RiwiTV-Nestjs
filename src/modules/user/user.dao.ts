@@ -79,6 +79,20 @@ export class UserDao {
       .getOne();
   }
 
+  /**
+   * Busca el usuario por el SHA-256 de su token de restablecimiento (HU-007). `resetToken` y
+   * `resetTokenExpires` son `select: false`: igual que en `findByActivationToken`, sin
+   * `addSelect` el WHERE no los vería y el service no podría comprobar la caducidad.
+   */
+  findByResetTokenHash(hash: string): Promise<User | null> {
+    return this.repo
+      .createQueryBuilder('user')
+      .addSelect('user.resetToken')
+      .addSelect('user.resetTokenExpires')
+      .where('user.resetToken = :hash', { hash })
+      .getOne();
+  }
+
   /** Con `manager` participa en la transacción del registro (HU-006). */
   create(data: Partial<User>, manager?: EntityManager): Promise<User> {
     const repo = manager ? manager.getRepository(User) : this.repo;

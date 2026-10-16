@@ -13,6 +13,8 @@ import type { Request, Response } from 'express';
 import { AuthService, SessionContext } from './auth.service.js';
 import { LoginDto, RefreshTokenDto } from './dto/login.dto.js';
 import { ActivateAccountDto } from './dto/activate-account.dto.js';
+import { ForgotPasswordDto } from './dto/forgot-password.dto.js';
+import { ResetPasswordDto } from './dto/reset-password.dto.js';
 import { RegisterDto } from './dto/register.dto.js';
 import { Public } from '../../common/decorators/public.decorator.js';
 import type { AuthUser } from './interfaces/auth-response.interface.js';
@@ -89,6 +91,25 @@ export class AuthController {
     const result = await this.authService.login(dto, this.contextFrom(request));
     this.setAuthCookies(response, result);
     return result;
+  }
+
+  /** Publico: quien olvido su contrasena no tiene sesion. Responde siempre igual (200). */
+  @Public()
+  @Post('forgot-password')
+  @HttpCode(HttpStatus.OK)
+  async forgotPassword(@Body() dto: ForgotPasswordDto): Promise<{ message: string }> {
+    return this.authService.forgotPassword(dto.email);
+  }
+
+  /** Publico: la autorizacion es el token de un solo uso recibido por correo. */
+  @Public()
+  @Post('reset-password')
+  @HttpCode(HttpStatus.OK)
+  async resetPassword(
+    @Body() dto: ResetPasswordDto,
+    @Req() request: Request,
+  ): Promise<{ message: string }> {
+    return this.authService.resetPassword(dto, this.contextFrom(request));
   }
 
   /**

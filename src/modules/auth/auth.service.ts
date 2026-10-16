@@ -24,6 +24,8 @@ import { ConfigService } from '../../config/config.service.js';
 import { Config } from '../../config/config.keys.js';
 import { AccountStatus, MembershipStatus, UserRole } from '../../common/enums/domain.enums.js';
 import { Captcha, CaptchaChallenge } from '../../common/utils/captcha.js';
+import { Password } from '../../common/utils/password.js';
+import { ResetPasswordDto } from './dto/reset-password.dto.js';
 
 /** Contexto de la peticion, necesario para auditar la sesion. */
 export interface SessionContext {
@@ -43,6 +45,13 @@ const LOCK_DURATION_MINUTES = 15;
 
 /** Horas de validez del token de activacion de cuenta. */
 const ACTIVATION_TTL_MS = 24 * 60 * 60 * 1000;
+
+const DEFAULT_RESET_EXPIRY = '1h';
+const DEFAULT_RESET_TTL_MS = 3_600_000; // 1 hora
+
+/** Respuesta unica de forgot-password: no revela si el correo esta registrado. */
+const FORGOT_PASSWORD_MESSAGE =
+  'Si el correo está registrado, recibirás instrucciones para restablecer tu contraseña';
 
 /**
  * Hash bcrypt valido y fijo, usado SOLO para igualar el tiempo de respuesta
@@ -69,6 +78,7 @@ export class AuthService {
     private readonly dataSource: DataSource,
     private readonly membershipService: MembershipService,
     private readonly mail: MailService,
+    private readonly password: Password,
   ) {
     this.saltRounds = Number(process.env.SALT_ROUNDS ?? DEFAULT_SALT_ROUNDS);
     this.maxFailedAttempts = Number(
@@ -233,6 +243,70 @@ export class AuthService {
       membership: membership ? { code: membership.code, status: membership.status } : null,
       benefits: [],
     };
+  }
+
+  // ---------------------------------------------------- recuperar contrasena
+
+  /**
+   * Solicita el restablecimiento (HU-007). La respuesta es SIEMPRE la misma, exista o no el
+   * correo o este inactiva la cuenta: asi no se puede enumerar usuarios. El token se guarda
+   * como SHA-256 (agent.md §4.8) y el correo se envia sin esperar, para que el tiempo de
+   * respuesta no dependa del SMTP; un fallo de envio solo se registra (sin el token).
+   */
+  async forgotPassword(email: string): Promise<{ message: string }> {
+    const user = await this.userDao.findByEmail(email);
+
+    if (user && user.accountStatus === AccountStatus.ACTIVE) {
+      const token = randomBytes(32).toString('hex');
+      const ttlMs = this.tokenExpiry.parseExpiryToMs(
+        this.configService.get(Config.RESET_TOKEN_EXPIRES_IN) || DEFAULT_RESET_EXPIRY,
+        DEFAULT_RESET_TTL_MS,
+      );
+
+      await this.userDao.update(user.id, {
+        resetToken: this.hashToken(token),
+        resetTokenExpires: new Date(Date.now() + ttlMs),
+      });
+
+      this.mail.sendPasswordReset(user.email, user.name, token).catch((error: Error) => {
+        this.logger.error(
+          `No se pudo enviar el correo de restablecimiento al usuario ${user.id}: ${error.message}`,
+        );
+      });
+    }
+
+    return { message: FORGOT_PASSWORD_MESSAGE };
+  }
+
+  /**
+   * Cambia la contrasena con el token del correo. El token es de un solo uso (se anula en el
+   * mismo UPDATE) y se revocan todas las sesiones: quien tuviera la contrasena vieja pierde acceso.
+   */
+  async resetPassword(
+    dto: ResetPasswordDto,
+    _context: SessionContext = {},
+  ): Promise<{ message: string }> {
+    if (dto.password !== dto.confirmPassword) {
+      throw new BadRequestException('Contraseñas no coinciden');
+    }
+    if (!(await this.password.validatePassword(dto.password))) {
+      throw new BadRequestException('La contraseña no cumple con los parámetros requeridos');
+    }
+
+    const user = await this.userDao.findByResetTokenHash(this.hashToken(dto.token));
+
+    if (!user || !user.resetTokenExpires || user.resetTokenExpires.getTime() <= Date.now()) {
+      throw new BadRequestException('Token de restablecimiento inválido o expirado');
+    }
+
+    await this.userDao.update(user.id, {
+      password: await this.bcrypt.hashPassword(dto.password, this.saltRounds),
+      resetToken: null,
+      resetTokenExpires: null,
+    });
+    await this.authDao.revokeAllSessions(user.id);
+
+    return { message: 'Contraseña actualizada' };
   }
 
   // ----------------------------------------------------------------- refresh

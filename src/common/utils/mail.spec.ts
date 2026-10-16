@@ -89,6 +89,37 @@ describe('MailService (HU-006)', () => {
     await expect(mail.sendActivation('a@b.co', 'A', 't')).rejects.toThrow('smtp caído');
   });
 
+  describe('sendPasswordReset (HU-007)', () => {
+    it('envía texto plano en español con el enlace de restablecimiento', async () => {
+      const mail = new MailService(
+        configWith({ SMTP_HOST: 'smtp.example.com', FRONTEND_URL: 'https://riwitv.example.com' }),
+      );
+
+      await mail.sendPasswordReset('ana@example.com', 'Ana', 'tok123');
+
+      const sent = sendMail.mock.calls[0][0];
+      expect(sent.to).toBe('ana@example.com');
+      expect(sent.text).toContain('Hola Ana');
+      expect(sent.text).toContain('https://riwitv.example.com/reset-password?token=tok123');
+      expect(sent.html).toBeUndefined();
+    });
+
+    it('el log emulado incluye el enlace solo fuera de producción', async () => {
+      vi.stubEnv('NODE_ENV', 'development');
+      const dev = new MailService(configWith({}));
+      const devLog = vi.spyOn(dev['logger'], 'log').mockImplementation(() => undefined);
+      await dev.sendPasswordReset('ana@example.com', 'Ana', 'tok123');
+      expect(String(devLog.mock.calls[0][0])).toContain('reset-password?token=tok123');
+
+      vi.stubEnv('NODE_ENV', 'production');
+      const prod = new MailService(configWith({}));
+      const prodLog = vi.spyOn(prod['logger'], 'log').mockImplementation(() => undefined);
+      await prod.sendPasswordReset('ana@example.com', 'Ana', 'tok123');
+      expect(String(prodLog.mock.calls[0][0])).toContain('ana@example.com');
+      expect(String(prodLog.mock.calls[0][0])).not.toContain('tok123');
+    });
+  });
+
   describe('sendReleaseNotice (HU-005)', () => {
     it('envía texto plano en español con el título de la película', async () => {
       const mail = new MailService(configWith({ SMTP_HOST: 'smtp.example.com' }));

@@ -67,6 +67,8 @@ describe('AuthController', () => {
       refresh: vi.fn(),
       logout: vi.fn(),
       logoutAll: vi.fn(),
+      forgotPassword: vi.fn(),
+      resetPassword: vi.fn(),
     } as unknown as AuthService;
 
     controller = new AuthController(authService);
@@ -121,6 +123,45 @@ describe('AuthController', () => {
   });
 
   // --------------------------------------------------------------------- login
+
+  // ------------------------------------------------------------ recuperar clave
+
+  describe('forgotPassword / resetPassword (HU-007)', () => {
+    it('forgot-password es POST publico con 200 y delega el correo', async () => {
+      const handler = AuthController.prototype.forgotPassword;
+      expect(Reflect.getMetadata('path', handler)).toBe('forgot-password');
+      expect(Reflect.getMetadata('method', handler)).toBe(RequestMethod.POST);
+      expect(Reflect.getMetadata('__httpCode__', handler)).toBe(200);
+      expect(Reflect.getMetadata(IS_PUBLIC_KEY, handler)).toBe(true);
+
+      (authService.forgotPassword as ReturnType<typeof vi.fn>).mockResolvedValue({ message: 'ok' });
+      await expect(controller.forgotPassword({ email: 'ana@example.com' })).resolves.toEqual({
+        message: 'ok',
+      });
+      expect(authService.forgotPassword).toHaveBeenCalledWith('ana@example.com');
+    });
+
+    it('reset-password es POST publico con 200 y pasa el contexto de la peticion', async () => {
+      const handler = AuthController.prototype.resetPassword;
+      expect(Reflect.getMetadata('path', handler)).toBe('reset-password');
+      expect(Reflect.getMetadata('method', handler)).toBe(RequestMethod.POST);
+      expect(Reflect.getMetadata('__httpCode__', handler)).toBe(200);
+      expect(Reflect.getMetadata(IS_PUBLIC_KEY, handler)).toBe(true);
+
+      (authService.resetPassword as ReturnType<typeof vi.fn>).mockResolvedValue({ message: 'ok' });
+      const dto = { token: 'a'.repeat(64), password: 'x', confirmPassword: 'x' };
+      const request = buildRequest({
+        headers: { 'user-agent': 'UA', 'x-forwarded-for': '1.2.3.4' },
+      });
+
+      await controller.resetPassword(dto, request);
+
+      expect(authService.resetPassword).toHaveBeenCalledWith(dto, {
+        ip: '1.2.3.4',
+        userAgent: 'UA',
+      });
+    });
+  });
 
   describe('login', () => {
     it('devuelve los tokens en el cuerpo para clientes que no manejan cookies', async () => {

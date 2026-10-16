@@ -260,7 +260,7 @@ El original montaba cada ruta con prefijo `/api`, `/api/v1` y sin prefijo. **Nes
 | HU-006 | `POST /api/auth/verify-email` (+ `GET`, y alias `/activate`) | `POST /api/auth/verify-email` y alias `POST /api/auth/activate` (implementados) |
 | HU-006 | `POST /membership/create` | `POST /api/membership/create` (JWT, 201 `{ code, status }`, 409 si ya tiene) implementado |
 | HU-007 | `POST /api/auth/login`, `/refresh`, `/logout` | ✅ (+ `logout-all`, `me`) |
-| HU-007 | `POST /api/auth/forgot-password`, `/reset-password` | **No existe** |
+| HU-007 | `POST /api/auth/forgot-password`, `/reset-password` | `POST /api/auth/forgot-password` y `/reset-password` (públicos, 200) implementados |
 | HU-008 | `/api/profile`, `/api/membership`, `/benefits` | **No existe** |
 | HU-009 | `GET /api/functions/:id`, `/prices` | **No existe** |
 | HU-010 | `GET /api/functions/:id/seats`, `/api/reservations/...` | **No existe** |
