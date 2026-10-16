@@ -255,10 +255,10 @@ El original montaba cada ruta con prefijo `/api`, `/api/v1` y sin prefijo. **Nes
 | HU-002 | `GET /countries`, `/departments/:countryId`, `/cities/:departmentId` | `GET /api/countries`, `/api/departments/:countryId`, `/api/cities/:departmentId` (implementadas) |
 | HU-002 | `POST`/`PUT /users/location` | `POST /api/users/location` (JWT) implementado; `PUT` no (fuera de alcance) |
 | HU-003/004/005 | `/api/movies/...` | **Parcial:** HU-003 completa: `GET /api/movies`, `/weekly`, `/filter` y `/today` con filtros (`cityId`, `cinemaId`, `genre`, `classification`, `language`, `roomType`, `format`, `date`, `available`); HU-004 completa: `GET /api/movies/:id`, `/:id/functions`, `/:id/recommendations` (`?cityId=` opcional); HU-005 completa salvo el correo (RN-020): `GET /api/movies/upcoming`, `/upcoming/:id` |
-| HU-005 | `POST /api/notifications/upcoming` | `POST /api/notifications/upcoming` (JWT, 201) implementado; el correo automático (RN-020) queda para HU-006 |
+| HU-005 | `POST /api/notifications/upcoming` | `POST /api/notifications/upcoming` (JWT, 201) implementado; el correo automático (RN-020) sigue pendiente (`MailService` ya existe desde HU-006) |
 | HU-006 | `GET /api/auth/captcha`, `POST /api/auth/register` | ✅ |
-| HU-006 | `POST /api/auth/verify-email` (+ `GET`, y alias `/activate`) | Solo `POST /api/auth/activate` |
-| HU-006 | `POST /membership/create` | **No existe** |
+| HU-006 | `POST /api/auth/verify-email` (+ `GET`, y alias `/activate`) | `POST /api/auth/verify-email` y alias `POST /api/auth/activate` (implementados) |
+| HU-006 | `POST /membership/create` | `POST /api/membership/create` (JWT, 201 `{ code, status }`, 409 si ya tiene) implementado |
 | HU-007 | `POST /api/auth/login`, `/refresh`, `/logout` | ✅ (+ `logout-all`, `me`) |
 | HU-007 | `POST /api/auth/forgot-password`, `/reset-password` | **No existe** |
 | HU-008 | `/api/profile`, `/api/membership`, `/benefits` | **No existe** |
@@ -278,9 +278,6 @@ El original montaba cada ruta con prefijo `/api`, `/api/v1` y sin prefijo. **Nes
 |---|---|---|
 | RN-030 (HU-007) | Cada login invalida el refresh token anterior | Permite N sesiones simultáneas (`Sessions`) |
 | HU-007 | El login devuelve también membresía, beneficios y datos del perfil | Solo tokens y `AuthUser` |
-| RN-022 (HU-006) | Contraseña de mínimo 10 caracteres | `CreateUserDto` acepta desde 8 (el validador sí exige 10) |
-| HU-006 | Membresía creada en estado **Activa** | No se crea membresía (el original la creaba `pending`) |
-| HU-006 | Correo con enlace de activación | El token solo se escribe en el log (fuera de producción) |
 | HU-010 | Máximo de sillas configurable **por función** | No existe (el original usaba `MAX_SEATS_PER_RESERVATION` global) |
 
 ### 5.4 Diferencias de contrato con el original
@@ -289,8 +286,8 @@ El original montaba cada ruta con prefijo `/api`, `/api/v1` y sin prefijo. **Nes
 |---|---|---|
 | Formato de error | `{ error: "mensaje" }` | `{ statusCode, message, path, timestamp }` |
 | Código de `login` / `refresh` | `201` | `200` |
-| Respuesta de `register` | `{ message, userId }` | `{ user, activationToken? }` |
-| `register` crea además | `Profile` + `Membership` pendiente y envía correo | solo `User`; el token se escribe en el log |
+| Respuesta de `register` | `{ message, userId }` | `{ user, membership: { code, status }, activationToken? }` |
+| `register` crea además | `Profile` + `Membership` pendiente y envía correo | `Membership` Activa (transacción) y correo de activación (emulado sin `SMTP_HOST`); el perfil es solo `User` |
 | Teléfono | exactamente 10 dígitos | `^\+?[0-9]{7,15}$` |
 | Ciudad en el alta | `city` (texto) | `cityId` (número) |
 | Activación ya hecha | `400 "La cuenta ya está activada"` | no se distingue |

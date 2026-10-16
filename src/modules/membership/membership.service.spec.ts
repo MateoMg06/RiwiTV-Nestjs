@@ -1,11 +1,11 @@
 import { describe, it, expect, vi } from 'vitest';
-import { InternalServerErrorException } from '@nestjs/common';
+import { ConflictException, InternalServerErrorException } from '@nestjs/common';
 import type { EntityManager } from 'typeorm';
 import { MembershipService } from './membership.service.js';
 import { MembershipStatus } from '../../common/enums/domain.enums.js';
 
-function setup(create: ReturnType<typeof vi.fn>) {
-  const dao = { create };
+function setup(create: ReturnType<typeof vi.fn>, findByUserId = vi.fn()) {
+  const dao = { create, findByUserId };
   return { dao, service: new MembershipService(dao as never) };
 }
 
@@ -61,5 +61,26 @@ describe('MembershipService.createForUser (HU-006)', () => {
 
     await expect(service.createForUser(7)).rejects.toBe(error);
     expect(create).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('MembershipService.create (HU-006)', () => {
+  it('409 si el usuario ya tiene membresía y no crea otra', async () => {
+    const create = vi.fn();
+    const { service } = setup(create, vi.fn().mockResolvedValue({ id: 1 }));
+
+    await expect(service.create(7)).rejects.toThrow(
+      new ConflictException('El usuario ya tiene una membresía'),
+    );
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('crea la membresía si el usuario no tiene', async () => {
+    const saved = { id: 2 };
+    const create = vi.fn().mockResolvedValue(saved);
+    const { dao, service } = setup(create, vi.fn().mockResolvedValue(null));
+
+    await expect(service.create(7)).resolves.toBe(saved);
+    expect(dao.findByUserId).toHaveBeenCalledWith(7);
   });
 });

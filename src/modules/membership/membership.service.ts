@@ -1,4 +1,4 @@
-import { Injectable, InternalServerErrorException } from '@nestjs/common';
+import { ConflictException, Injectable, InternalServerErrorException } from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import { EntityManager } from 'typeorm';
 import { MembershipDao } from './membership.dao.js';
@@ -11,6 +11,14 @@ const MAX_CODE_ATTEMPTS = 3;
 @Injectable()
 export class MembershipService {
   constructor(private readonly membershipDao: MembershipDao) {}
+
+  /** `POST /membership/create`: 409 si el usuario ya tiene membresía. */
+  async create(userId: number): Promise<Membership> {
+    if (await this.membershipDao.findByUserId(userId)) {
+      throw new ConflictException('El usuario ya tiene una membresía');
+    }
+    return this.createForUser(userId);
+  }
 
   /**
    * Crea la membresía `ACTIVE` del usuario con un código único `RTV-XXXXXXXXXX` (RN de HU-006).
