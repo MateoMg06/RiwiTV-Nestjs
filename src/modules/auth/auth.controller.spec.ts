@@ -6,7 +6,7 @@ import { AuthController } from './auth.controller.js';
 import type { AuthService } from './auth.service.js';
 import type { AuthResponse } from './interfaces/auth-response.interface.js';
 import type { AuthenticatedRequest } from './interfaces/authenticated-request.interface.js';
-import { UserRole } from '../../common/enums/domain.enums.js';
+import { MembershipStatus, UserRole } from '../../common/enums/domain.enums.js';
 
 /**
  * Tests del controller de autenticacion.
@@ -134,6 +134,23 @@ describe('AuthController', () => {
       );
 
       expect(result).toEqual(tokens);
+    });
+
+    it('incluye membership y benefits en el cuerpo, sin tocar las cookies', async () => {
+      const full = {
+        ...tokens,
+        membership: { code: 'RTV-0123456789', status: MembershipStatus.ACTIVE },
+        benefits: [],
+      };
+      (authService.login as ReturnType<typeof vi.fn>).mockResolvedValue(full);
+
+      const result = await controller.login(
+        { email: 'ana@example.com', password: 'Contrasena1!' },
+        buildRequest(),
+        buildResponse(),
+      );
+
+      expect(result).toEqual(full);
     });
 
     it('emite las dos cookies httpOnly, con la de refresh restringida a /api/auth', async () => {

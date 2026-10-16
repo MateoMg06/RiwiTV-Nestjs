@@ -1,4 +1,4 @@
-import { UserRole } from '../../../common/enums/domain.enums.js';
+import { MembershipStatus, UserRole } from '../../../common/enums/domain.enums.js';
 
 /**
  * Respuesta de login / refresh.
@@ -22,4 +22,13 @@ export interface AuthResponse {
   /** Segundos de vida del access token. El frontend lo usa para renovar antes de que expire. */
   expiresIn: number;
   user: AuthUser;
+}
+
+/**
+ * Respuesta de login (HU-007): ademas de los tokens, la membresía y los beneficios activos.
+ * `benefits` es provisional (siempre `[]`) hasta que HU-008 defina los beneficios por nivel.
+ */
+export interface LoginResponse extends AuthResponse {
+  membership: { code: string; status: MembershipStatus } | null;
+  benefits: [];
 }

@@ -10,7 +10,7 @@ import { DataSource } from 'typeorm';
 import { JwtPayload } from 'jsonwebtoken';
 import { AuthDao } from './auth.dao.js';
 import { LoginDto } from './dto/login.dto.js';
-import { AuthResponse, AuthUser } from './interfaces/auth-response.interface.js';
+import { AuthResponse, AuthUser, LoginResponse } from './interfaces/auth-response.interface.js';
 import { UserService } from '../user/user.service.js';
 import { MembershipService } from '../membership/membership.service.js';
 import { UserDao } from '../user/user.dao.js';
@@ -190,7 +190,7 @@ export class AuthService {
 
   // ------------------------------------------------------------------- login
 
-  async login(dto: LoginDto, context: SessionContext = {}): Promise<AuthResponse> {
+  async login(dto: LoginDto, context: SessionContext = {}): Promise<LoginResponse> {
     const user = await this.userDao.findByEmailWithPassword(dto.email);
 
     // Si el correo no existe, se compara igual contra un hash ficticio. Sin
@@ -223,7 +223,14 @@ export class AuthService {
     // (aqui y no en `issueTokens`, que tambien usa `refresh` y ya revoca la suya).
     await this.authDao.revokeAllSessions(user.id);
 
-    return this.issueTokens(user, context);
+    const tokens = await this.issueTokens(user, context);
+    const membership = await this.membershipService.findByUserId(user.id);
+
+    return {
+      ...tokens,
+      membership: membership ? { code: membership.code, status: membership.status } : null,
+      benefits: [],
+    };
   }
 
   // ----------------------------------------------------------------- refresh

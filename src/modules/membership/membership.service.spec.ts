@@ -84,3 +84,13 @@ describe('MembershipService.create (HU-006)', () => {
     expect(dao.findByUserId).toHaveBeenCalledWith(7);
   });
 });
+
+describe('MembershipService.findByUserId (HU-007)', () => {
+  it('delega en el DAO', async () => {
+    const found = { id: 3 };
+    const { dao, service } = setup(vi.fn(), vi.fn().mockResolvedValue(found));
+
+    await expect(service.findByUserId(7)).resolves.toBe(found);
+    expect(dao.findByUserId).toHaveBeenCalledWith(7);
+  });
+});

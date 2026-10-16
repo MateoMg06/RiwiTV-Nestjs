@@ -14,7 +14,7 @@
 | HU-004 | Completa salvo prueba manual | Columnas nuevas en `Movie` (`synopsis`, `cast`, `bannerUrl`, `trailerUrl`) y `Showtime.price`; `GET /movies/:id` (detalle con `formats`, `languages`, `prices` y `showtimes` futuras), `GET /movies/:id/functions`, `GET /movies/:id/recommendations` (públicos, `?cityId=` opcional en detalle y funciones); `MovieDao`; seed ampliado con `refresh` | Prueba manual contra Postgres |
 | HU-005 | Completa salvo prueba manual | Entidad `ReleaseNotification` (tabla `ReleaseNotifications`, único `(userId, movieId)`); `GET /movies/upcoming` y `/movies/upcoming/:id` (públicos, orden por fecha, `daysUntilRelease`); `POST /notifications/upcoming` (JWT, 201, sin duplicados RN-019); seed con estrenos próximos y uno vencido; RN-020: `ReleaseNotificationJob` (cada hora) envía el correo (emulado sin `SMTP_HOST`) a las solicitudes `PENDING` de películas `ACTIVE` y las pasa a `SENT` | Prueba manual contra Postgres |
 | HU-006 | Completa salvo prueba manual | Captcha, registro transaccional (usuario + membresía **Activa** con código `RTV-XXXXXXXXXX`), BCrypt, contraseña ≥10 con complejidad (DTO y validador), `gender`/`favoriteCinemaId`, correo de activación (emulado sin `SMTP_HOST`), `POST /auth/verify-email` (+ alias `/activate`), `POST /membership/create` (JWT) | Prueba manual contra Postgres. El perfil es solo `User` (sin Profile, historial, billetera ni preferencias: decisión de la persona) |
-| HU-007 | Parcial | JWT 15 min, refresh 7 d en BD con rotación, logout, bloqueo 15 min tras intentos, solo cuentas activas, cookies | respuesta de login con membresía, beneficios y perfil; forgot/reset password; auditoría de accesos con IP y dispositivo |
+| HU-007 | Parcial | JWT 15 min, refresh 7 d en BD con rotación, logout, bloqueo 15 min tras intentos, solo cuentas activas, cookies | `benefits` reales en el login (HU-008, hoy `[]`); forgot/reset password; auditoría de accesos con IP y dispositivo |
 | HU-008 | No iniciada | — | `GET`/`PUT /profile`, `GET /membership`, `/membership/benefits`: QR único, nivel, descuentos por nivel, bonos, historial de compras, reservas activas, preferencias; cambio de correo con nueva validación (RN-034) |
 | HU-009 | No iniciada | — | `GET /functions/:id` y `/prices`; solo funciones activas y no iniciadas; precio según formato, sala y horario |
 | HU-010 | No iniciada | — | Seat y SeatLock con 7 estados; mapa de sillas; bloqueo transaccional 10 min; liberación manual y automática; máximo por función; auditoría de bloqueos y liberaciones; resumen con total |
@@ -111,7 +111,7 @@ Por historia:
 - [ ] HU-006: para probar SMTP real, definir `SMTP_HOST` y compañía en el `.env`.
 - [ ] HU-006: no se validan `cityId` ni `favoriteCinemaId` inexistentes en el registro (el `cityId` ya falla por FK; `favoriteCinemaId` no tiene relación).
 - [ ] HU-008: el enum `Membership` (BASICA/PLATA) y `User.membership` no se tocaron en HU-006; HU-008 (niveles Bronce/Plata/Oro/Platino) debe decidir si se reemplazan o se eliminan.
-- [ ] HU-007: invalidar el refresh anterior en cada login (RN-030); login devuelve membresía, beneficios y perfil; `POST /auth/forgot-password` y `/reset-password` + `PasswordResetToken`; `AccessAudit` (IP y dispositivo) en login, login fallido, refresh, logout, reset y activación.
+- [ ] HU-007: invalidar el refresh anterior en cada login (RN-030); `benefits` reales en el login (HU-008, hoy `[]`); `POST /auth/forgot-password` y `/reset-password` + `PasswordResetToken`; `AccessAudit` (IP y dispositivo) en login, login fallido, refresh, logout, reset y activación.
 - [ ] HU-008: `GET`/`PUT /profile`, `GET /membership`, `/membership/benefits`; reservas activas; cambio de correo con nueva validación.
 - [ ] HU-009: `GET /functions/:id`, `/prices`; solo funciones activas y no iniciadas.
 - [ ] HU-010: `GET /functions/:id/seats`, `POST /reservations/lock-seats`, `DELETE /reservations/release-seats`, `GET /reservations/summary`; job de liberación (`@nestjs/schedule`); máximo de sillas por función; auditoría de bloqueos; variable `SEAT_LOCK_MINUTES`.
@@ -148,9 +148,17 @@ No se implementa (no pertenece a HU-001 a HU-010):
 15. [x] Email no implementado (nodemailer instalado sin uso). Resuelto en HU-006 con `MailService` (correo de activación; emulado si no hay `SMTP_HOST`).
 16. [x] `agent.md` §2 y §4 dicen ESM / `import.meta.dirname`, pero desde `35c326d` el proyecto es CommonJS (`__dirname` es válido).
 17. [x] HU-007 RN-030: el login no invalida el refresh token anterior; `Sessions` permite N sesiones simultáneas — `src/modules/auth/auth.service.ts`. Resuelto: `login()` llama a `revokeAllSessions` antes de emitir tokens.
-18. [ ] HU-007: la respuesta de login no incluye membresía, beneficios ni datos del perfil — `src/modules/auth/auth.service.ts`.
+18. [x] HU-007: la respuesta de login no incluye membresía, beneficios ni datos del perfil — `src/modules/auth/auth.service.ts`. Resuelto: `LoginResponse` con `membership`, `benefits: []` (provisional hasta HU-008) y `user`.
 
 ## Registro de cambios
+
+### 2026-10-16 — feat(HU-007): el login devuelve membresía, beneficios y perfil (bug #18, paso 3 de 6)
+- **Archivos:** `src/modules/membership/membership.service.ts` (+spec), `src/modules/auth/interfaces/auth-response.interface.ts`, `src/modules/auth/auth.service.ts` (+spec), `src/modules/auth/auth.controller.spec.ts`, `agent.md` (§5.3), `memory.md`.
+- **Qué:** `MembershipService.findByUserId` (delega en el DAO). `LoginResponse extends AuthResponse { membership: { code, status } | null; benefits: [] }`. `login()` lo devuelve tras `issueTokens`; `user` es el `AuthUser` de siempre. `refresh` y `/auth/me` no cambian.
+- **Por qué:** HU-007: el login devuelve también membresía, beneficios activos y datos básicos. Los beneficios dependen de los niveles de HU-008: `[]` provisional (decisión de la persona).
+- **Impacto:** `POST /auth/login` añade `membership` y `benefits` al cuerpo (campos nuevos; avisar al frontend). Sin variables nuevas.
+- **Verificación:** `npm run test` ✅ (324/324) · `npm run lint` ✅ · `npm run build` ✅.
+- **Pendiente derivado:** HU-008 rellena `benefits`.
 
 ### 2026-10-16 — fix(HU-007): `AuthPayload` refleja las claims reales del token (bug #8, paso 2 de 6)
 - **Archivos:** `src/modules/auth/interfaces/auth-payload.interface.ts`, `memory.md`.

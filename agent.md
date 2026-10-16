@@ -276,7 +276,7 @@ El original montaba cada ruta con prefijo `/api`, `/api/v1` y sin prefijo. **Nes
 
 | Regla | Backlog | Nest hoy |
 |---|---|---|
-| HU-007 | El login devuelve también membresía, beneficios y datos del perfil | Solo tokens y `AuthUser` |
+| HU-007 | El login devuelve también membresía, beneficios y datos del perfil | Devuelve `membership` y `user`; `benefits` es `[]` hasta HU-008 |
 | HU-010 | Máximo de sillas configurable **por función** | No existe (el original usaba `MAX_SEATS_PER_RESERVATION` global) |
 
 ### 5.4 Diferencias de contrato con el original

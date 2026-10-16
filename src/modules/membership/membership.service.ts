@@ -12,6 +12,11 @@ const MAX_CODE_ATTEMPTS = 3;
 export class MembershipService {
   constructor(private readonly membershipDao: MembershipDao) {}
 
+  /** Membresía del usuario (la usa el login de HU-007). */
+  findByUserId(userId: number): Promise<Membership | null> {
+    return this.membershipDao.findByUserId(userId);
+  }
+
   /** `POST /membership/create`: 409 si el usuario ya tiene membresía. */
   async create(userId: number): Promise<Membership> {
     if (await this.membershipDao.findByUserId(userId)) {

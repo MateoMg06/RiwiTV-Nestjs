@@ -141,6 +141,7 @@ describe('AuthService', () => {
       createForUser: vi
         .fn()
         .mockResolvedValue({ code: 'RTV-0123456789', status: MembershipStatus.ACTIVE }),
+      findByUserId: vi.fn().mockResolvedValue(null),
     } as unknown as MembershipService;
 
     mail = { sendActivation: vi.fn().mockResolvedValue(undefined) } as unknown as MailService;
@@ -427,6 +428,43 @@ describe('AuthService', () => {
       const createOrder = (authDao.createSession as ReturnType<typeof vi.fn>).mock
         .invocationCallOrder[0];
       expect(revokeOrder).toBeLessThan(createOrder);
+    });
+
+    it('devuelve tokens, usuario, membresia y beneficios vacios', async () => {
+      vi.spyOn(bcrypt, 'comparePassword').mockResolvedValue(true);
+      const user = buildUser();
+      (userDao.findByEmailWithPassword as ReturnType<typeof vi.fn>).mockResolvedValue(user);
+      (userDao.update as ReturnType<typeof vi.fn>).mockResolvedValue(user);
+      (membershipService.findByUserId as ReturnType<typeof vi.fn>).mockResolvedValue({
+        id: 4,
+        userId: 1,
+        code: 'RTV-0123456789',
+        status: MembershipStatus.ACTIVE,
+      });
+
+      const result = await service.login({ email: 'ana@example.com', password: 'ok' });
+
+      expect(membershipService.findByUserId).toHaveBeenCalledWith(1);
+      expect(result.membership).toEqual({
+        code: 'RTV-0123456789',
+        status: MembershipStatus.ACTIVE,
+      });
+      expect(result.benefits).toEqual([]);
+      expect(result.user.email).toBe('ana@example.com');
+      expect(result.accessToken).toEqual(expect.any(String));
+      expect(result.refreshToken).toEqual(expect.any(String));
+    });
+
+    it('membership es null si el usuario no tiene membresia', async () => {
+      vi.spyOn(bcrypt, 'comparePassword').mockResolvedValue(true);
+      const user = buildUser();
+      (userDao.findByEmailWithPassword as ReturnType<typeof vi.fn>).mockResolvedValue(user);
+      (userDao.update as ReturnType<typeof vi.fn>).mockResolvedValue(user);
+
+      const result = await service.login({ email: 'ana@example.com', password: 'ok' });
+
+      expect(result.membership).toBeNull();
+      expect(result.benefits).toEqual([]);
     });
 
     it('RN-030: un login fallido o con cuenta inactiva no revoca sesiones', async () => {
