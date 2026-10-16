@@ -147,7 +147,8 @@ export class AuthService {
 
     const { user, membership } = await this.dataSource.transaction(async (manager) => {
       const created = await this.userService.create({ ...dto, role: UserRole.USUARIO }, manager, {
-        activationToken,
+        // En BD solo el SHA-256 (agent.md §4.8); el token en claro va al correo.
+        activationToken: this.hashToken(activationToken),
         activationTokenExpires,
       });
       const membership = await this.membershipService.createForUser(created.id, manager);
@@ -186,7 +187,7 @@ export class AuthService {
    * correo de activacion no debe permitir reutilizar un token viejo.
    */
   async activate(token: string): Promise<AuthUser> {
-    const user = await this.userDao.findByActivationToken(token);
+    const user = await this.userDao.findByActivationToken(this.hashToken(token));
 
     if (!user) {
       throw new BadRequestException('Token de activacion invalido');

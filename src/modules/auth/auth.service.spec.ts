@@ -238,10 +238,13 @@ describe('AuthService', () => {
       const result = await service.register(buildRegisterDto());
 
       expect(result.activationToken).toMatch(/^[0-9a-f]{64}$/);
-      expect(userService.create).toHaveBeenCalledWith(expect.anything(), manager, {
-        activationToken: result.activationToken,
-        activationTokenExpires: expect.any(Date),
-      });
+      // Bug #19: en BD va el SHA-256, nunca el token en claro.
+      const persisted = (userService.create as ReturnType<typeof vi.fn>).mock.calls[0][2];
+      expect(persisted.activationToken).not.toBe(result.activationToken);
+      expect(persisted.activationToken).toBe(
+        createHash('sha256').update(result.activationToken!).digest('hex'),
+      );
+      expect(persisted.activationTokenExpires).toEqual(expect.any(Date));
       // Sin UPDATE posterior: el token viaja en el mismo INSERT.
       expect(userDao.update).not.toHaveBeenCalled();
     });
@@ -324,6 +327,31 @@ describe('AuthService', () => {
   });
 
   describe('activate', () => {
+    const sha = (t: string) => createHash('sha256').update(t).digest('hex');
+
+    it('busca por el SHA-256 del token en claro recibido', async () => {
+      const plain = 'a'.repeat(64);
+      (userDao.findByActivationToken as ReturnType<typeof vi.fn>).mockImplementation(
+        async (value: string) =>
+          value === sha(plain)
+            ? buildUser({ activationTokenExpires: new Date(Date.now() + 60_000) })
+            : null,
+      );
+      (userDao.update as ReturnType<typeof vi.fn>).mockResolvedValue(buildUser());
+
+      await expect(service.activate(plain)).resolves.toMatchObject({ id: 1 });
+      expect(userDao.findByActivationToken).toHaveBeenCalledWith(sha(plain));
+    });
+
+    it('rechaza el hash como entrada (se volvería a hashear y no coincide)', async () => {
+      const plain = 'a'.repeat(64);
+      (userDao.findByActivationToken as ReturnType<typeof vi.fn>).mockImplementation(
+        async (value: string) => (value === sha(plain) ? buildUser() : null),
+      );
+
+      await expect(service.activate(sha(plain))).rejects.toBeInstanceOf(BadRequestException);
+    });
+
     it('rechaza un token inexistente', async () => {
       (userDao.findByActivationToken as ReturnType<typeof vi.fn>).mockResolvedValue(null);
 

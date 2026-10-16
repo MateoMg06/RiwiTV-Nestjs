@@ -65,17 +65,14 @@ export class UserDao {
    * columna esta declarada con `select: false` y sin esto devolveria `undefined`
    * en el WHERE, haciendo que la activacion fallara siempre.
    *
-   * La busqueda es por el token EN CRUDO y no por su hash. A diferencia del
-   * refresh token, aqui no se guarda hash: el token de activacion no da acceso
-   * a la sesion, solo habilita una cuenta que el propio usuario acaba de crear.
-   * Aun asi, viaja por correo y tiene caducidad de 24 horas.
+   * Recibe el SHA-256 del token (lo que se guarda en BD), no el token en claro.
    */
-  findByActivationToken(token: string): Promise<User | null> {
+  findByActivationToken(hash: string): Promise<User | null> {
     return this.repo
       .createQueryBuilder('user')
       .addSelect('user.activationToken')
       .addSelect('user.activationTokenExpires')
-      .where('user.activationToken = :token', { token })
+      .where('user.activationToken = :hash', { hash })
       .getOne();
   }
 

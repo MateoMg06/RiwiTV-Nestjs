@@ -155,9 +155,17 @@ No se implementa (no pertenece a HU-001 a HU-010):
 16. [x] `agent.md` §2 y §4 dicen ESM / `import.meta.dirname`, pero desde `35c326d` el proyecto es CommonJS (`__dirname` es válido).
 17. [x] HU-007 RN-030: el login no invalida el refresh token anterior; `Sessions` permite N sesiones simultáneas — `src/modules/auth/auth.service.ts`. Resuelto: `login()` llama a `revokeAllSessions` antes de emitir tokens.
 18. [x] HU-007: la respuesta de login no incluye membresía, beneficios ni datos del perfil — `src/modules/auth/auth.service.ts`. Resuelto: `LoginResponse` con `membership`, `benefits: []` (provisional hasta HU-008) y `user`.
-19. [ ] HU-006: el token de activación se guarda **en claro** (`User.activationToken`, búsqueda por valor en `UserDao.findByActivationToken`); `agent.md` §4.8 exige SHA-256 para los tokens de servidor. Detectado en HU-007, no corregido aquí — `auth.service.ts`, `user.dao.ts`.
+19. [x] HU-006: el token de activación se guardaba **en claro** (`User.activationToken`); `agent.md` §4.8 exige SHA-256. Resuelto: `register` guarda `hashToken(token)` y `activate` busca por el hash — `auth.service.ts`, `user.dao.ts`.
 
 ## Registro de cambios
+
+### 2026-10-16 — fix(HU-006): token de activación guardado como SHA-256 (bug #19)
+- **Archivos:** `src/modules/auth/auth.service.ts` (+spec), `src/modules/user/user.dao.ts` (comentario y parámetro de `findByActivationToken`), `memory.md`.
+- **Qué:** `register` persiste `hashToken(token)` en `activationToken` (reutiliza el `hashToken` privado de `AuthService`). El correo (`MailService.sendActivation`) y la respuesta `activationToken?` (solo fuera de producción) siguen llevando el token en claro. `activate`/`verify-email` busca con `findByActivationToken(hashToken(token))`. El log del token en `register` sigue siendo solo fuera de producción.
+- **Por qué:** bug #19; `agent.md` §4.8 (tokens de servidor como SHA-256).
+- **Impacto:** sin cambios de contrato HTTP ni esquema. **Los tokens de activación pendientes generados antes de este cambio dejan de funcionar** (están en claro en BD): en desarrollo, volver a registrar la cuenta o recrear la BD.
+- **Verificación:** `npm run test` ✅ (362/362) · `npm run lint` ✅ · `npm run build` ✅.
+- **Pendiente derivado:** ninguno.
 
 ### 2026-10-16 — fix(HU-007): consumo atómico del token de restablecimiento
 - **Archivos:** `src/modules/user/user.dao.ts` (+spec), `src/modules/auth/auth.service.ts` (+spec), `memory.md`.
