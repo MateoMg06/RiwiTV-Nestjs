@@ -159,6 +159,14 @@ No se implementa (no pertenece a HU-001 a HU-010):
 
 ## Registro de cambios
 
+### 2026-10-16 — feat(HU-008): `PUT /profile` sin cambio de correo (paso 5 de 6)
+- **Archivos:** `src/modules/profile/{update-profile.dto,profile.service,profile.controller}.ts` (+specs), `memory.md`.
+- **Qué:** `PUT /profile` (JWT, 200) con `UpdateProfileDto` = `name`, `lastName`, `phone`, `gender` (PartialType/PickType de `CreateUserDto`, mismos validadores), `photoUrl?` (`@IsUrl` solo https, máx. 500, `null` la quita) y `acceptsNotifications?`. El service solo escribe los campos que llegan (sin campos no hace UPDATE) y devuelve el perfil. `role`, `accountStatus`, `password`, `membership`, `level`, `cityId` (solo `/users/location`, RN-006), `favoriteCinemaId`, `birthDate` y documento dan 400 por `forbidNonWhitelisted`.
+- **Por qué:** HU-008 (actualizar datos y preferencias de notificación).
+- **Impacto:** endpoint nuevo. Observación: con `enableImplicitConversion` global, un valor no booleano en `acceptsNotifications` (p. ej. `"si"`) se convierte a `true` antes de validar; es comportamiento previo del `ValidationPipe`, no se tocó.
+- **Verificación:** `npm run test` ✅ (404/404) · `npm run lint` ✅ · `npm run build` ✅.
+- **Pendiente derivado:** paso 6 (correo).
+
 ### 2026-10-16 — feat(HU-008): `GET /profile` (paso 4 de 6)
 - **Archivos:** `src/modules/profile/{profile.controller,profile.service,profile.module}.ts` (+specs de service y controller), `src/modules/user/user.entity.ts`, `src/app.module.ts`, `memory.md`.
 - **Qué:** módulo nuevo `profile` (importa `UserModule` y `MembershipModule`, sin ciclos). `GET /profile` (JWT) → `{ id, name, lastName, email, phone, documentType, documentNumber, birthDate, gender, cityId, favoriteCinemaId, photoUrl, preferences: { acceptsNotifications }, membership: { code, level, status } | null, purchaseHistory: [], activeReservations: [] }`. 401 sin token, 404 usuario inexistente. Proyección campo a campo: nunca password, role, accountStatus, tokens, lockedUntil ni failedLoginAttempts. `User.photoUrl` varchar(500) nullable.

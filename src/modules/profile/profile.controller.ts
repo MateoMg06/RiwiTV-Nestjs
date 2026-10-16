@@ -1,5 +1,6 @@
-import { Controller, Get, Req, UnauthorizedException } from '@nestjs/common';
+import { Body, Controller, Get, Put, Req, UnauthorizedException } from '@nestjs/common';
 import type { AuthenticatedRequest } from '../auth/interfaces/authenticated-request.interface.js';
+import { UpdateProfileDto } from './update-profile.dto.js';
 import { ProfileResponse, ProfileService } from './profile.service.js';
 
 /** HU-008: sin `@Public()` el guard global exige JWT; la identidad sale del token. */
@@ -18,5 +19,13 @@ export class ProfileController {
   @Get()
   get(@Req() request: AuthenticatedRequest): Promise<ProfileResponse> {
     return this.profileService.get(this.userIdOf(request));
+  }
+
+  @Put()
+  update(
+    @Body() dto: UpdateProfileDto,
+    @Req() request: AuthenticatedRequest,
+  ): Promise<ProfileResponse> {
+    return this.profileService.update(this.userIdOf(request), dto);
   }
 }

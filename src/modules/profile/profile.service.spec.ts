@@ -28,7 +28,14 @@ const buildUser = (over: Record<string, unknown> = {}) => ({
 });
 
 function setup(user: unknown = buildUser(), membership: unknown = null) {
-  const userDao = { findById: vi.fn().mockResolvedValue(user) };
+  const userDao = {
+    findById: vi.fn().mockResolvedValue(user),
+    update: vi
+      .fn()
+      .mockImplementation((_id: number, data: object) =>
+        Promise.resolve({ ...(user as object), ...data }),
+      ),
+  };
   const membershipService = { findByUserId: vi.fn().mockResolvedValue(membership) };
   return {
     userDao,
@@ -95,5 +102,52 @@ describe('ProfileService.get (HU-008)', () => {
   it('404 si el usuario no existe', async () => {
     const { service } = setup(null);
     await expect(service.get(7)).rejects.toBeInstanceOf(NotFoundException);
+  });
+});
+
+describe('ProfileService.update (HU-008)', () => {
+  it('actualiza solo los campos recibidos y devuelve el perfil', async () => {
+    const { service, userDao } = setup();
+
+    const result = await service.update(7, { name: 'Luisa', acceptsNotifications: false });
+
+    expect(userDao.update).toHaveBeenCalledWith(7, { name: 'Luisa', acceptsNotifications: false });
+    expect(result).toMatchObject({
+      name: 'Luisa',
+      lastName: 'Pérez',
+      preferences: { acceptsNotifications: false },
+    });
+  });
+
+  it('photoUrl null quita la foto; una URL la fija', async () => {
+    const { service, userDao } = setup(buildUser({ photoUrl: 'https://a.example.com/x.png' }));
+
+    await service.update(7, { photoUrl: null });
+    expect(userDao.update).toHaveBeenLastCalledWith(7, { photoUrl: null });
+
+    await service.update(7, { photoUrl: 'https://b.example.com/y.png' });
+    expect(userDao.update).toHaveBeenLastCalledWith(7, { photoUrl: 'https://b.example.com/y.png' });
+  });
+
+  it('sin campos no escribe y devuelve el perfil', async () => {
+    const { service, userDao } = setup();
+
+    await expect(service.update(7, {})).resolves.toMatchObject({ id: 7 });
+    expect(userDao.update).not.toHaveBeenCalled();
+  });
+
+  it('solo toca campos editables aunque el DTO traiga otros', async () => {
+    const { service, userDao } = setup();
+
+    await service.update(7, { role: 'admin', cityId: 9, name: 'Ana' } as never);
+
+    expect(userDao.update).toHaveBeenCalledWith(7, { name: 'Ana' });
+  });
+
+  it('404 si el usuario no existe', async () => {
+    const { service, userDao } = setup(null);
+
+    await expect(service.update(7, { name: 'Ana' })).rejects.toBeInstanceOf(NotFoundException);
+    expect(userDao.update).not.toHaveBeenCalled();
   });
 });

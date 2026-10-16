@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { UserDao } from '../user/user.dao.js';
 import { User } from '../user/user.entity.js';
+import { UpdateProfileDto } from './update-profile.dto.js';
 import { MembershipService } from '../membership/membership.service.js';
 import { MembershipLevel, MembershipStatus } from '../../common/enums/domain.enums.js';
 
@@ -36,6 +37,29 @@ export class ProfileService {
     const user = await this.userDao.findById(userId);
     if (!user) throw new NotFoundException('Usuario no encontrado');
     return this.toProfile(user);
+  }
+
+  /**
+   * `PUT /profile`: actualiza solo los campos editables que llegan (`undefined` = no tocar;
+   * `photoUrl: null` quita la foto) y devuelve el perfil.
+   */
+  async update(userId: number, dto: UpdateProfileDto): Promise<ProfileResponse> {
+    const user = await this.userDao.findById(userId);
+    if (!user) throw new NotFoundException('Usuario no encontrado');
+
+    const data: Partial<User> = {};
+    if (dto.name !== undefined) data.name = dto.name;
+    if (dto.lastName !== undefined) data.lastName = dto.lastName;
+    if (dto.phone !== undefined) data.phone = dto.phone;
+    if (dto.gender !== undefined) data.gender = dto.gender;
+    if (dto.photoUrl !== undefined) data.photoUrl = dto.photoUrl;
+    if (dto.acceptsNotifications !== undefined) {
+      data.acceptsNotifications = dto.acceptsNotifications;
+    }
+
+    if (Object.keys(data).length === 0) return this.toProfile(user);
+    const updated = await this.userDao.update(userId, data);
+    return this.toProfile(updated ?? user);
   }
 
   private async toProfile(user: User): Promise<ProfileResponse> {
