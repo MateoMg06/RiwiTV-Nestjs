@@ -53,8 +53,8 @@
 1. [x] `GET /auth/captcha` expone `answer` — `src/modules/auth/auth.controller.ts`, `src/common/utils/captcha.ts`.
 2. [x] Cookie `refresh_token` con `path: '/auth'` pero la ruta real es `/api/auth` — `auth.controller.ts`.
 3. [x] `revokedAt: undefined` no filtra en TypeORM; usar `IsNull()` — `src/modules/auth/auth.dao.ts`.
-4. [ ] `__dirname` en ESM — `src/config/config.service.ts`.
-5. [ ] `.env` no se carga en `process.env` pero varios módulos lo leen de ahí — `database.ts`, `cors.ts`, `auth.service.ts`, `user.service.ts`.
+4. [x] `__dirname` en ESM — `src/config/config.service.ts`. (Resuelto por `35c326d`: el proyecto pasó a CommonJS.)
+5. [x] `.env` no se carga en `process.env` pero varios módulos lo leen de ahí — `database.ts`, `cors.ts`, `auth.service.ts`, `user.service.ts`.
 6. [x] `/user/:id` sin control de propiedad; `POST /user` sin `@Roles`; `+id` sin `ParseIntPipe` — `src/modules/user/user.controller.ts`.
 7. [ ] Política de contraseña inconsistente (DTO 8–72 vs validador ≥10 + complejidad).
 8. [ ] `AuthPayload` declara `name`/`membership` que el token no trae.
@@ -65,8 +65,17 @@
 13. [ ] `tsconfig.build.tsbuildinfo` versionado.
 14. [ ] `.env.example` con secretos que parecen reales (JWT, Observe, `SEED_API_KEY`): reemplazar y rotar.
 15. [ ] Email no implementado (nodemailer instalado sin uso).
+16. [ ] `agent.md` §2 y §4 dicen ESM / `import.meta.dirname`, pero desde `35c326d` el proyecto es CommonJS (`__dirname` es válido).
 
 ## Registro de cambios
+
+### 2026-10-15 — fix: `.env` obligatorio y cargado en `process.env` antes del arranque
+- **Archivos:** `src/config/load-env.ts` (nuevo), `src/config/config.service.ts`, `src/main.ts`, `docker-compose.yml`
+- **Qué:** `load-env.ts` exige el `.env` de la raíz (si falta: mensaje y `exit(1)`) y lo carga en `process.env` sin sobrescribir variables ya definidas. Se importa primero en `main.ts`, porque `database.ts`, `cors.ts` y otros leen `process.env` al importarse. `ConfigService` ya no lee el archivo, solo `process.env`. `docker-compose.yml` monta `./.env` en solo lectura (`.dockerignore` lo deja fuera de la imagen).
+- **Por qué:** Bug #5. Además, antes la app hacía `exit(0)` sin `.env` y el contenedor se cerraba "con éxito". Decisión: el `.env` es obligatorio en todos los entornos.
+- **Impacto:** variables de entorno: hace falta `.env` para arrancar (local y Docker).
+- **Verificación:** `npm run test` ✅ (104/104) · `npm run lint` ✅ · `npm run build` ✅ (ejecutados sobre el conjunto de arreglos de esta sesión). Probado con `dist/`: sin `.env` sale con código 1; con `.env` carga las variables. Docker no probado.
+- **Pendiente derivado:** probar `docker compose up` con el volumen montado.
 
 ### 2026-10-15 — fix: `POST /user` solo admin y `ParseIntPipe` en `/user/:id`
 - **Archivos:** `src/modules/user/user.controller.ts`, `src/modules/user/user.controller.spec.ts`
@@ -107,8 +116,6 @@
 - **Impacto:** autenticación por cookie vuelve a funcionar. Contrato: cookie `accessToken`.
 - **Verificación:** `npm run test` ✅ (104/104) · `npm run lint` ✅ · `npm run build` ✅ (ejecutados sobre el conjunto de arreglos de esta sesión).
 - **Pendiente derivado:** ninguno.
-
-
 
 ### 2026-10-15 — docs: añadir contexto del repo original a agent.md y memory.md
 - **Archivos:** `agent.md`, `memory.md`

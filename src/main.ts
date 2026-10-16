@@ -1,3 +1,5 @@
+// Primero: varios modulos leen process.env al importarse.
+import './config/load-env.js';
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';

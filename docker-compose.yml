@@ -10,6 +10,11 @@ services:
     env_file:
       - ./.env
 
+    # La app exige el archivo .env (src/config/load-env.ts). No va en la
+    # imagen (.dockerignore), asi que se monta en solo lectura.
+    volumes:
+      - ./.env:/usr/src/app/.env:ro
+
     environment:
       - NODE_ENV=${NODE_ENV}
       - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:${POSTGRES_PORT:-5432}/${POSTGRES_DB}
