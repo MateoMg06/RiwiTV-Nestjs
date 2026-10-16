@@ -166,6 +166,12 @@ No se implementa (no pertenece a HU-001 a HU-010):
 
 ## Registro de cambios
 
+### 2026-10-16 — feat(HU-009): `ShowtimeService` (paso 3 de 4)
+- **Archivos:** `src/modules/showtime/showtime.service.ts`, `showtime.service.spec.ts`, `showtime.module.ts`, `memory.md`.
+- **Qué:** `getById(id)` → `{ ...toShowtime(s), movie: { id, name, duration, classification, posterUrl } }`; `getPrices(id)` → `{ functionId, format, roomType, startsAt, status, price }` (precio de lista, `Number`). Ambos pasan por `findSelectableOrFail` → 404 «Función no encontrada». Registrado en `ShowtimeModule` (sin export; solo lo usa el controller del paso 4).
+- **Por qué:** HU-009.
+- **Impacto:** ninguno todavía en la API.
+- **Verificación:** `npm run test` ✅ (428/428) · `npm run lint` ✅ · `npm run build` ✅
 ### 2026-10-16 — feat(HU-009): `ShowtimeDao.findSelectableById` (paso 2 de 4)
 - **Archivos:** `src/modules/showtime/showtime.dao.ts`, `src/modules/showtime/showtime.dao.spec.ts`, `memory.md`.
 - **Qué:** consulta única (`innerJoinAndSelect` de película y cine, `getOne`) con `showtime.id`, película `ACTIVE`, función `<> CANCELLED` (SOLD_OUT incluida), cine activo y `startsAt > ahora` (RN-035). `null` si no hay fila.
