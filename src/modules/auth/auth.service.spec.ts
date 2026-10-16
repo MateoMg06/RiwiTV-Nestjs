@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { BadRequestException, ForbiddenException, UnauthorizedException } from '@nestjs/common';
 import { AuthService } from './auth.service.js';
+import type { DataSource, EntityManager } from 'typeorm';
+import type { MembershipService } from '../membership/membership.service.js';
 import type { AuthDao } from './auth.dao.js';
 import type { UserService } from '../user/user.service.js';
 import type { UserDao } from '../user/user.dao.js';
@@ -13,7 +15,7 @@ import { TokenExpiry } from '../../common/utils/token-expiry.js';
 import { ConfigService } from '../../config/config.service.js';
 import { Captcha } from '../../common/utils/captcha.js';
 import { Config } from '../../config/config.keys.js';
-import { AccountStatus, UserRole } from '../../common/enums/domain.enums.js';
+import { AccountStatus, MembershipStatus, UserRole } from '../../common/enums/domain.enums.js';
 
 /**
  * Tests de la logica de autenticacion.
@@ -81,6 +83,9 @@ describe('AuthService', () => {
   let tokenExpiry: TokenExpiry;
   let configService: ConfigService;
   let captcha: Captcha;
+  let manager: EntityManager;
+  let dataSource: DataSource;
+  let membershipService: MembershipService;
   let service: AuthService;
 
   beforeEach(() => {
@@ -126,6 +131,16 @@ describe('AuthService', () => {
       }),
     } as unknown as ConfigService;
 
+    manager = {} as EntityManager;
+    dataSource = {
+      transaction: vi.fn((cb: (m: EntityManager) => Promise<unknown>) => cb(manager)),
+    } as unknown as DataSource;
+    membershipService = {
+      createForUser: vi
+        .fn()
+        .mockResolvedValue({ code: 'RTV-0123456789', status: MembershipStatus.ACTIVE }),
+    } as unknown as MembershipService;
+
     service = new AuthService(
       authDao,
       userService,
@@ -135,6 +150,8 @@ describe('AuthService', () => {
       tokenExpiry,
       configService,
       captcha,
+      dataSource,
+      membershipService,
     );
   });
 
@@ -185,23 +202,45 @@ describe('AuthService', () => {
 
       expect(userService.create).toHaveBeenCalledWith(
         expect.objectContaining({ role: UserRole.USUARIO }),
+        manager,
+        expect.any(Object),
       );
     });
 
-    it('genera un token de activacion y lo persiste', async () => {
+    it('genera un token de activacion y lo persiste en la creacion del usuario', async () => {
       (userService.create as ReturnType<typeof vi.fn>).mockResolvedValue(buildUser());
-      (userDao.update as ReturnType<typeof vi.fn>).mockResolvedValue(buildUser());
 
       const result = await service.register(buildRegisterDto());
 
       expect(result.activationToken).toMatch(/^[0-9a-f]{64}$/);
-      expect(userDao.update).toHaveBeenCalledWith(
-        1,
-        expect.objectContaining({
-          activationToken: result.activationToken,
-          activationTokenExpires: expect.any(Date),
-        }),
-      );
+      expect(userService.create).toHaveBeenCalledWith(expect.anything(), manager, {
+        activationToken: result.activationToken,
+        activationTokenExpires: expect.any(Date),
+      });
+      // Sin UPDATE posterior: el token viaja en el mismo INSERT.
+      expect(userDao.update).not.toHaveBeenCalled();
+    });
+
+    it('crea usuario y membresia dentro de una transaccion', async () => {
+      (userService.create as ReturnType<typeof vi.fn>).mockResolvedValue(buildUser({ id: 5 }));
+
+      const result = await service.register(buildRegisterDto());
+
+      expect(dataSource.transaction).toHaveBeenCalledTimes(1);
+      expect(membershipService.createForUser).toHaveBeenCalledWith(5, manager);
+      expect(result.membership).toEqual({
+        code: 'RTV-0123456789',
+        status: MembershipStatus.ACTIVE,
+      });
+      expect(result.user).toMatchObject({ id: 5, email: 'ana@example.com' });
+    });
+
+    it('si la membresia falla, el error se propaga (la transaccion revierte al usuario)', async () => {
+      (userService.create as ReturnType<typeof vi.fn>).mockResolvedValue(buildUser());
+      const error = new Error('sin membresia');
+      (membershipService.createForUser as ReturnType<typeof vi.fn>).mockRejectedValue(error);
+
+      await expect(service.register(buildRegisterDto())).rejects.toBe(error);
     });
 
     it('devuelve el token solo fuera de produccion', async () => {
@@ -210,7 +249,6 @@ describe('AuthService', () => {
       try {
         process.env.NODE_ENV = 'production';
         (userService.create as ReturnType<typeof vi.fn>).mockResolvedValue(buildUser());
-        (userDao.update as ReturnType<typeof vi.fn>).mockResolvedValue(buildUser());
 
         const result = await service.register(buildRegisterDto());
 
@@ -227,9 +265,7 @@ describe('AuthService', () => {
     it('rechaza un token inexistente', async () => {
       (userDao.findByActivationToken as ReturnType<typeof vi.fn>).mockResolvedValue(null);
 
-      await expect(service.activate('x'.repeat(64))).rejects.toBeInstanceOf(
-        BadRequestException,
-      );
+      await expect(service.activate('x'.repeat(64))).rejects.toBeInstanceOf(BadRequestException);
     });
 
     it('rechaza un token expirado', async () => {
@@ -271,9 +307,7 @@ describe('AuthService', () => {
 
   describe('login', () => {
     it('rechaza una contrasena incorrecta con el mismo mensaje que un correo inexistente', async () => {
-      (userDao.findByEmailWithPassword as ReturnType<typeof vi.fn>).mockResolvedValue(
-        buildUser(),
-      );
+      (userDao.findByEmailWithPassword as ReturnType<typeof vi.fn>).mockResolvedValue(buildUser());
 
       const conUsuario = service.login({ email: 'ana@example.com', password: 'mala' });
       const sinUsuario = service.login({ email: 'nadie@example.com', password: 'mala' });
@@ -351,9 +385,7 @@ describe('AuthService', () => {
     it('rechaza un token desconocido', async () => {
       (authDao.findByRefreshTokenHash as ReturnType<typeof vi.fn>).mockResolvedValue(null);
 
-      await expect(service.refresh('desconocido')).rejects.toBeInstanceOf(
-        UnauthorizedException,
-      );
+      await expect(service.refresh('desconocido')).rejects.toBeInstanceOf(UnauthorizedException);
     });
 
     it('rechaza una sesion expirada', async () => {
@@ -369,9 +401,7 @@ describe('AuthService', () => {
         buildSession({ revokedAt: new Date() }),
       );
 
-      await expect(service.refresh('token')).rejects.toBeInstanceOf(
-        UnauthorizedException,
-      );
+      await expect(service.refresh('token')).rejects.toBeInstanceOf(UnauthorizedException);
 
       // Es la respuesta al unico indicador fiable de robo de token: no se sabe
       // cual de las dos presentaciones es la falsa, asi que se cae todas.
@@ -388,9 +418,7 @@ describe('AuthService', () => {
         buildUser({ accountStatus: AccountStatus.INACTIVE }),
       );
 
-      await expect(service.refresh('token')).rejects.toBeInstanceOf(
-        ForbiddenException,
-      );
+      await expect(service.refresh('token')).rejects.toBeInstanceOf(ForbiddenException);
     });
 
     it('rota el token revocando la sesion anterior', async () => {

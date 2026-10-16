@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, EntityManager, Repository } from 'typeorm';
 import { User } from './user.entity.js';
 
 /**
@@ -79,8 +79,10 @@ export class UserDao {
       .getOne();
   }
 
-  create(data: Partial<User>): Promise<User> {
-    return this.repo.save(this.repo.create(data));
+  /** Con `manager` participa en la transacción del registro (HU-006). */
+  create(data: Partial<User>, manager?: EntityManager): Promise<User> {
+    const repo = manager ? manager.getRepository(User) : this.repo;
+    return repo.save(repo.create(data));
   }
 
   async update(id: number, data: Partial<User>): Promise<User | null> {

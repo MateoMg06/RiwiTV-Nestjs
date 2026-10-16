@@ -6,11 +6,13 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { createHash, randomBytes } from 'crypto';
+import { DataSource } from 'typeorm';
 import { JwtPayload } from 'jsonwebtoken';
 import { AuthDao } from './auth.dao.js';
 import { LoginDto } from './dto/login.dto.js';
 import { AuthResponse, AuthUser } from './interfaces/auth-response.interface.js';
 import { UserService } from '../user/user.service.js';
+import { MembershipService } from '../membership/membership.service.js';
 import { UserDao } from '../user/user.dao.js';
 import { RegisterDto } from './dto/register.dto.js';
 import { User } from '../user/user.entity.js';
@@ -19,7 +21,7 @@ import { Jwt } from '../../common/utils/jwt.js';
 import { TokenExpiry } from '../../common/utils/token-expiry.js';
 import { ConfigService } from '../../config/config.service.js';
 import { Config } from '../../config/config.keys.js';
-import { AccountStatus, UserRole } from '../../common/enums/domain.enums.js';
+import { AccountStatus, MembershipStatus, UserRole } from '../../common/enums/domain.enums.js';
 import { Captcha, CaptchaChallenge } from '../../common/utils/captcha.js';
 
 /** Contexto de la peticion, necesario para auditar la sesion. */
@@ -63,6 +65,8 @@ export class AuthService {
     private readonly tokenExpiry: TokenExpiry,
     private readonly configService: ConfigService,
     private readonly captcha: Captcha,
+    private readonly dataSource: DataSource,
+    private readonly membershipService: MembershipService,
   ) {
     this.saltRounds = Number(process.env.SALT_ROUNDS ?? DEFAULT_SALT_ROUNDS);
     this.maxFailedAttempts = Number(
@@ -98,14 +102,19 @@ export class AuthService {
    * cambia el DTO o llama a `UserService.create()` desde otro sitio, el rol
    * sigue sin poder venir del cliente.
    *
+   * Usuario y membresia se crean en una sola transaccion (HU-006): si la membresia
+   * falla no queda un usuario sin ella. El token de activacion va en el mismo INSERT.
+   *
    * El token de activacion se devuelve en la respuesta SOLO fuera de produccion.
    * En produccion viajaria por correo; devolverlo en el JSON de la respuesta
    * seria equivale a no verificar nada, porque cualquiera que potentiellement
    *seitese registre (incluso con el correo de otra persona) lo leeria.
    */
-  async register(
-    dto: RegisterDto,
-  ): Promise<{ user: AuthUser; activationToken?: string }> {
+  async register(dto: RegisterDto): Promise<{
+    user: AuthUser;
+    membership: { code: string; status: MembershipStatus };
+    activationToken?: string;
+  }> {
     // Validar CAPTCHA antes de procesar el registro
     if (!dto.captchaToken || typeof dto.captchaAnswer !== 'number') {
       throw new BadRequestException('CAPTCHA requerido');
@@ -114,12 +123,17 @@ export class AuthService {
       throw new BadRequestException('Respuesta de CAPTCHA incorrecta');
     }
 
-    const user = await this.userService.create({ ...dto, role: UserRole.USUARIO });
-
     const activationToken = randomBytes(32).toString('hex');
     const activationTokenExpires = new Date(Date.now() + ACTIVATION_TTL_MS);
 
-    await this.userDao.update(user.id, { activationToken, activationTokenExpires });
+    const { user, membership } = await this.dataSource.transaction(async (manager) => {
+      const created = await this.userService.create({ ...dto, role: UserRole.USUARIO }, manager, {
+        activationToken,
+        activationTokenExpires,
+      });
+      const membership = await this.membershipService.createForUser(created.id, manager);
+      return { user: created, membership };
+    });
 
     const isProduction = process.env.NODE_ENV === 'production';
 
@@ -131,6 +145,7 @@ export class AuthService {
 
     return {
       user: this.toAuthUser(user),
+      membership: { code: membership.code, status: membership.status },
       ...(isProduction ? {} : { activationToken }),
     };
   }
@@ -173,10 +188,7 @@ export class AuthService {
     // podria enumerar los correos registrados. Con esto ambos caminos
     // cuestan exactamente lo mismo.
     const hashToCompare = user?.password ?? DUMMY_HASH;
-    const passwordMatches = await this.bcrypt.comparePassword(
-      dto.password,
-      hashToCompare,
-    );
+    const passwordMatches = await this.bcrypt.comparePassword(dto.password, hashToCompare);
 
     if (!user || !passwordMatches) {
       if (user) {
@@ -210,13 +222,8 @@ export class AuthService {
    * Ante esa senal se revocan TODAS las sesiones del usuario, porque no hay
    * forma de saber cual de las dos es la falsa.
    */
-  async refresh(
-    refreshToken: string,
-    context: SessionContext = {},
-  ): Promise<AuthResponse> {
-    const session = await this.authDao.findByRefreshTokenHash(
-      this.hashToken(refreshToken),
-    );
+  async refresh(refreshToken: string, context: SessionContext = {}): Promise<AuthResponse> {
+    const session = await this.authDao.findByRefreshTokenHash(this.hashToken(refreshToken));
 
     if (!session) {
       throw new UnauthorizedException('Refresh token invalido');
@@ -228,15 +235,11 @@ export class AuthService {
           'Revocando todas sus sesiones.',
       );
       await this.authDao.revokeAllSessions(session.userId);
-      throw new UnauthorizedException(
-        'Sesion invalida, por favor inicia sesion de nuevo',
-      );
+      throw new UnauthorizedException('Sesion invalida, por favor inicia sesion de nuevo');
     }
 
     if (session.expiresAt.getTime() <= Date.now()) {
-      throw new UnauthorizedException(
-        'La sesion expiro, por favor inicia sesion de nuevo',
-      );
+      throw new UnauthorizedException('La sesion expiro, por favor inicia sesion de nuevo');
     }
 
     const user = await this.userService.findOne(session.userId);
@@ -262,9 +265,7 @@ export class AuthService {
    * obliga a manejar un caso que en realidad es un exito.
    */
   async logout(refreshToken: string): Promise<void> {
-    const session = await this.authDao.findByRefreshTokenHash(
-      this.hashToken(refreshToken),
-    );
+    const session = await this.authDao.findByRefreshTokenHash(this.hashToken(refreshToken));
 
     if (!session || session.revokedAt !== null) {
       return;
@@ -287,32 +288,19 @@ export class AuthService {
    * El refresh se firma con un secreto DISTINTO al de acceso: asi, una fuga
    * del secreto de acceso no permite fabricar refresh tokens.
    */
-  private async issueTokens(
-    user: User,
-    context: SessionContext,
-  ): Promise<AuthResponse> {
+  private async issueTokens(user: User, context: SessionContext): Promise<AuthResponse> {
     const accessSecret = this.requireSecret(Config.JWT_SECRET, 'JWT_SECRET');
-    const refreshSecret = this.requireSecret(
-      Config.JWT_REFRESH_SECRET,
-      'JWT_REFRESH_SECRET',
-    );
+    const refreshSecret = this.requireSecret(Config.JWT_REFRESH_SECRET, 'JWT_REFRESH_SECRET');
 
     const accessExpiry = process.env.JWT_ACCESS_EXPIRES_IN ?? DEFAULT_ACCESS_EXPIRY;
-    const refreshExpiry =
-      process.env.JWT_REFRESH_EXPIRES_IN ?? DEFAULT_REFRESH_EXPIRY;
+    const refreshExpiry = process.env.JWT_REFRESH_EXPIRES_IN ?? DEFAULT_REFRESH_EXPIRY;
 
     // Se calcula la DURACION una sola vez y se reutiliza en tres sitios: la
     // expiracion del token, la fecha de la sesion y el `expiresIn` de la
     // respuesta. Si se parseara la cadena por separado en cada uno, cualquier
     // cambio futuro podria desalinearlos.
-    const accessTtlMs = this.tokenExpiry.parseExpiryToMs(
-      accessExpiry,
-      DEFAULT_ACCESS_TTL_MS,
-    );
-    const refreshTtlMs = this.tokenExpiry.parseExpiryToMs(
-      refreshExpiry,
-      DEFAULT_REFRESH_TTL_MS,
-    );
+    const accessTtlMs = this.tokenExpiry.parseExpiryToMs(accessExpiry, DEFAULT_ACCESS_TTL_MS);
+    const refreshTtlMs = this.tokenExpiry.parseExpiryToMs(refreshExpiry, DEFAULT_REFRESH_TTL_MS);
 
     // jsonwebtoken acepta segundos numericos. Se usan en vez de la cadena
     // ("15m") porque asi el TTL derivado arriba y el TTL real del token son
@@ -374,9 +362,7 @@ export class AuthService {
     };
 
     if (attempts >= this.maxFailedAttempts) {
-      patch.lockedUntil = new Date(
-        Date.now() + LOCK_DURATION_MINUTES * 60_000,
-      );
+      patch.lockedUntil = new Date(Date.now() + LOCK_DURATION_MINUTES * 60_000);
       patch.failedLoginAttempts = 0;
 
       this.logger.warn(
@@ -390,9 +376,7 @@ export class AuthService {
 
   private assertNotLocked(user: User): void {
     if (user.lockedUntil && user.lockedUntil.getTime() > Date.now()) {
-      const minutes = Math.ceil(
-        (user.lockedUntil.getTime() - Date.now()) / 60_000,
-      );
+      const minutes = Math.ceil((user.lockedUntil.getTime() - Date.now()) / 60_000);
       throw new ForbiddenException(
         `Cuenta bloqueada temporalmente por intentos fallidos. ` +
           `Intenta de nuevo en ${minutes} minuto(s).`,
@@ -402,9 +386,7 @@ export class AuthService {
 
   private assertIsActive(user: User): void {
     if (user.accountStatus !== AccountStatus.ACTIVE) {
-      throw new ForbiddenException(
-        'La cuenta no esta activa. Verifica tu correo.',
-      );
+      throw new ForbiddenException('La cuenta no esta activa. Verifica tu correo.');
     }
   }
 
@@ -429,12 +411,8 @@ export class AuthService {
   private requireSecret(key: string, label: string): string {
     const value = this.configService.get(key);
     if (!value) {
-      this.logger.error(
-        `${label} no configurado. La autenticacion no puede funcionar.`,
-      );
-      throw new UnauthorizedException(
-        'Error de configuracion de autenticacion',
-      );
+      this.logger.error(`${label} no configurado. La autenticacion no puede funcionar.`);
+      throw new UnauthorizedException('Error de configuracion de autenticacion');
     }
     return value;
   }

@@ -5,6 +5,7 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
+import { EntityManager } from 'typeorm';
 import { CreateUserDto } from './create-user.dto.js';
 import { UpdateUserDto } from './update-user.dto.js';
 import { UserDao } from './user.dao.js';
@@ -37,13 +38,21 @@ export class UserService {
     return user;
   }
 
-  async create(dto: CreateUserDto): Promise<User> {
+  /**
+   * `manager` une el alta a la transacción del registro (HU-006). `extra` permite fijar
+   * en la misma inserción el token de activación, sin un UPDATE posterior.
+   */
+  async create(
+    dto: CreateUserDto,
+    manager?: EntityManager,
+    extra?: Pick<Partial<User>, 'activationToken' | 'activationTokenExpires'>,
+  ): Promise<User> {
     await this.assertEmailIsFree(dto.email);
 
-    const isValidPassword= await this.password.validatePassword(dto.password)
-    
-    if(!isValidPassword){
-      throw new BadRequestException("La contraseña no cumple con los parámetros requeridos")
+    const isValidPassword = await this.password.validatePassword(dto.password);
+
+    if (!isValidPassword) {
+      throw new BadRequestException('La contraseña no cumple con los parámetros requeridos');
     }
 
     if (dto.password !== dto.confirmPassword) {
@@ -58,14 +67,10 @@ export class UserService {
     // el usuario y despues fallar dejaria un registro sin consentimiento
     // valido, que es exactamente lo que la norma de datos prohibe.
     if (!dto.acceptsDataProcessing) {
-      throw new BadRequestException(
-        'Debe aceptar el procesamiento de datos para continuar',
-      );
+      throw new BadRequestException('Debe aceptar el procesamiento de datos para continuar');
     }
     if (!dto.acceptsTerms) {
-      throw new BadRequestException(
-        'Debe aceptar los términos y condiciones para continuar',
-      );
+      throw new BadRequestException('Debe aceptar los términos y condiciones para continuar');
     }
 
     const usedDocument = await this.userDao.findByDocumentNumber(dto.documentNumber);
@@ -87,11 +92,15 @@ export class UserService {
       ...data
     } = dto;
 
-    return this.userDao.create({
-      ...data,
-      password: await this.bcrypt.hashPassword(password, this.saltRounds),
-      role: UserRole.USUARIO,
-    });
+    return this.userDao.create(
+      {
+        ...data,
+        ...extra,
+        password: await this.bcrypt.hashPassword(password, this.saltRounds),
+        role: UserRole.USUARIO,
+      },
+      manager,
+    );
   }
 
   async update(id: number, dto: UpdateUserDto): Promise<User> {
@@ -108,10 +117,10 @@ export class UserService {
     }
 
     if (dto.password) {
-      const isValidPassword= await this.password.validatePassword(dto.password)
-      
-      if(!isValidPassword){
-        throw new BadRequestException("La contraseña no cumple con los parámetros requeridos")
+      const isValidPassword = await this.password.validatePassword(dto.password);
+
+      if (!isValidPassword) {
+        throw new BadRequestException('La contraseña no cumple con los parámetros requeridos');
       }
       if (!dto.confirmPassword) {
         throw new BadRequestException('Debe confirmar la contraseña');

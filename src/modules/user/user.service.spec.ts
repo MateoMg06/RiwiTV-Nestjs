@@ -108,9 +108,7 @@ describe('UserService', () => {
     it('rechaza un correo ya registrado', async () => {
       (userDao.findByEmail as ReturnType<typeof vi.fn>).mockResolvedValue(buildUser());
 
-      await expect(service.create(buildCreateDto())).rejects.toBeInstanceOf(
-        ConflictException,
-      );
+      await expect(service.create(buildCreateDto())).rejects.toBeInstanceOf(ConflictException);
       expect(userDao.create).not.toHaveBeenCalled();
     });
 
@@ -138,20 +136,16 @@ describe('UserService', () => {
     });
 
     it('exige aceptar los terminos', async () => {
-      await expect(
-        service.create(buildCreateDto({ acceptsTerms: false })),
-      ).rejects.toBeInstanceOf(BadRequestException);
+      await expect(service.create(buildCreateDto({ acceptsTerms: false }))).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
       expect(userDao.create).not.toHaveBeenCalled();
     });
 
     it('rechaza un documento ya registrado', async () => {
-      (userDao.findByDocumentNumber as ReturnType<typeof vi.fn>).mockResolvedValue(
-        buildUser(),
-      );
+      (userDao.findByDocumentNumber as ReturnType<typeof vi.fn>).mockResolvedValue(buildUser());
 
-      await expect(service.create(buildCreateDto())).rejects.toBeInstanceOf(
-        ConflictException,
-      );
+      await expect(service.create(buildCreateDto())).rejects.toBeInstanceOf(ConflictException);
       expect(userDao.create).not.toHaveBeenCalled();
     });
 
@@ -191,6 +185,21 @@ describe('UserService', () => {
       );
     });
 
+    it('pasa el manager y el token de activacion al DAO (registro transaccional, HU-006)', async () => {
+      (userDao.create as ReturnType<typeof vi.fn>).mockResolvedValue(buildUser());
+      const manager = {} as never;
+      const expires = new Date();
+
+      await service.create(buildCreateDto(), manager, {
+        activationToken: 'tok',
+        activationTokenExpires: expires,
+      });
+
+      const [saved, usedManager] = (userDao.create as ReturnType<typeof vi.fn>).mock.calls[0];
+      expect(usedManager).toBe(manager);
+      expect(saved).toMatchObject({ activationToken: 'tok', activationTokenExpires: expires });
+    });
+
     it('nunca persiste los campos de confirmacion', async () => {
       (userDao.create as ReturnType<typeof vi.fn>).mockResolvedValue(buildUser());
 
@@ -211,13 +220,11 @@ describe('UserService', () => {
 
     it('rechaza cambiar a un correo que otro usuario ya usa', async () => {
       (userDao.findById as ReturnType<typeof vi.fn>).mockResolvedValue(buildUser());
-      (userDao.findByEmail as ReturnType<typeof vi.fn>).mockResolvedValue(
-        buildUser({ id: 2 }),
-      );
+      (userDao.findByEmail as ReturnType<typeof vi.fn>).mockResolvedValue(buildUser({ id: 2 }));
 
-      await expect(
-        service.update(1, { email: 'tomado@example.com' }),
-      ).rejects.toBeInstanceOf(ConflictException);
+      await expect(service.update(1, { email: 'tomado@example.com' })).rejects.toBeInstanceOf(
+        ConflictException,
+      );
     });
 
     it('permite mantener el propio correo sin entrar en conflicto consigo mismo', async () => {
@@ -225,17 +232,15 @@ describe('UserService', () => {
       (userDao.findByEmail as ReturnType<typeof vi.fn>).mockResolvedValue(buildUser({ id: 1 }));
       (userDao.update as ReturnType<typeof vi.fn>).mockResolvedValue(buildUser());
 
-      await expect(
-        service.update(1, { email: 'ana@example.com' }),
-      ).resolves.toBeDefined();
+      await expect(service.update(1, { email: 'ana@example.com' })).resolves.toBeDefined();
     });
 
     it('exige confirmar la contrasena cuando se cambia', async () => {
       (userDao.findById as ReturnType<typeof vi.fn>).mockResolvedValue(buildUser());
 
-      await expect(
-        service.update(1, { password: 'NuevaClave1!' }),
-      ).rejects.toBeInstanceOf(BadRequestException);
+      await expect(service.update(1, { password: 'NuevaClave1!' })).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
     });
 
     it('rechaza confirmaciones que no coinciden', async () => {
@@ -254,9 +259,7 @@ describe('UserService', () => {
 
       const patch = (userDao.update as ReturnType<typeof vi.fn>).mock.calls[0][1];
       expect(patch.password).toMatch(/^\$2[aby]\$/);
-      await expect(
-        bcrypt.comparePassword('NuevaClave1!', patch.password),
-      ).resolves.toBe(true);
+      await expect(bcrypt.comparePassword('NuevaClave1!', patch.password)).resolves.toBe(true);
     });
 
     it('ignora un rol enviado por el cliente en la actualizacion', async () => {

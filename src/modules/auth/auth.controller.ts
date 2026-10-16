@@ -17,6 +17,7 @@ import { RegisterDto } from './dto/register.dto.js';
 import { Public } from '../../common/decorators/public.decorator.js';
 import type { AuthUser } from './interfaces/auth-response.interface.js';
 import type { AuthenticatedRequest } from './interfaces/authenticated-request.interface.js';
+import { MembershipStatus } from '../../common/enums/domain.enums.js';
 import { CaptchaChallenge } from '../../common/utils/captcha.js';
 
 /** Nombres de las cookies de sesion, centralizados para no desincronizarlos. */
@@ -56,7 +57,11 @@ export class AuthController {
    */
   @Public()
   @Post('register')
-  async register(@Body() dto: RegisterDto): Promise<{ user: AuthUser; activationToken?: string }> {
+  async register(@Body() dto: RegisterDto): Promise<{
+    user: AuthUser;
+    membership: { code: string; status: MembershipStatus };
+    activationToken?: string;
+  }> {
     return this.authService.register(dto);
   }
 
@@ -108,10 +113,7 @@ export class AuthController {
       throw new UnauthorizedException('Refresh token no proporcionado');
     }
 
-    const result = await this.authService.refresh(
-      refreshToken,
-      this.contextFrom(request),
-    );
+    const result = await this.authService.refresh(refreshToken, this.contextFrom(request));
     this.setAuthCookies(response, result);
     return result;
   }

@@ -78,6 +78,8 @@
 - HU-005: seed con `releaseDays` opcional por película (default 30 UPCOMING, -60 resto): «Corazón de Barrio» +10, «El Regreso del Rey» +30, y al final «Estreno Vencido» (Acción, UPCOMING, -5; no debe salir) y «Última Frontera» (Acción, UPCOMING, +3). Las películas usan `refresh`, así que una BD ya sembrada toma las fechas nuevas.
 - HU-006: **el perfil es solo `User`** (decisión de la persona). No hay tablas Profile, preferencias, historial de compras ni billetera; «vacío» = sin filas. Se añaden a `User` `gender` (varchar 20, opcional) y `favoriteCinemaId` (int, opcional, sin relación). Desviación respecto a `agent.md` §1.2 (que habla de perfil, historial, billetera y preferencias).
 - HU-006: `favoriteCinemaId` y `cityId` inexistentes no se validan en el registro (ver Pendientes).
+- HU-006: `POST /auth/register` responde `{ user, membership: { code, status }, activationToken? }` (el token solo fuera de producción). **Hay que avisar al frontend** del campo nuevo `membership`.
+- HU-006: el registro es transaccional (`DataSource.transaction`): usuario + membresía se crean juntos y el token de activación va en el mismo INSERT (se elimina el `userDao.update` posterior). Los chequeos previos (correo, documento) quedan fuera de la transacción.
 
 ## Pendientes
 
@@ -103,6 +105,7 @@ Por historia:
 - [ ] HU-005: prueba manual contra Postgres (`npm run build && npm run seed`; la tabla `ReleaseNotifications` la crea `synchronize`). Consultas: `GET /api/movies/upcoming` (orden: Última Frontera +3, Corazón de Barrio +10, El Regreso del Rey +30; sin «Estreno Vencido»), `/upcoming/<id>` (`daysUntilRelease`), `/upcoming/<id de Estreno Vencido o película activa>` (→ 404), `/upcoming/abc` (→ 400); con JWT `POST /api/notifications/upcoming` `{"movieId":<id>}` (201), repetido (409), `{"movieId":<activa>}` (404), `{"movieId":<id>,"cityId":9999}` (404), sin token (401).
 - [ ] HU-006: `register` crea `Profile`, `Membership` **Activa** con código único, historial vacío, billetera vacía y preferencias; correo de activación (nodemailer); `POST /auth/verify-email`; `POST /membership/create`; `CreateUserDto` con mínimo 10 caracteres.
 - [ ] HU-006: no se validan `cityId` ni `favoriteCinemaId` inexistentes en el registro (el `cityId` ya falla por FK; `favoriteCinemaId` no tiene relación).
+- [ ] HU-008: el enum `Membership` (BASICA/PLATA) y `User.membership` no se tocaron en HU-006; HU-008 (niveles Bronce/Plata/Oro/Platino) debe decidir si se reemplazan o se eliminan.
 - [ ] HU-007: invalidar el refresh anterior en cada login (RN-030); login devuelve membresía, beneficios y perfil; `POST /auth/forgot-password` y `/reset-password` + `PasswordResetToken`; `AccessAudit` (IP y dispositivo) en login, login fallido, refresh, logout, reset y activación.
 - [ ] HU-008: `GET`/`PUT /profile`, `GET /membership`, `/membership/benefits`; reservas activas; cambio de correo con nueva validación.
 - [ ] HU-009: `GET /functions/:id`, `/prices`; solo funciones activas y no iniciadas.
@@ -143,6 +146,14 @@ No se implementa (no pertenece a HU-001 a HU-010):
 18. [ ] HU-007: la respuesta de login no incluye membresía, beneficios ni datos del perfil — `src/modules/auth/auth.service.ts`.
 
 ## Registro de cambios
+
+### 2026-10-16 — feat(HU-006): registro transaccional con membresía Activa (paso 3 de 6)
+- **Archivos:** `src/modules/user/{user.dao,user.service}.ts` y specs (`user.dao.spec.ts` nuevo), `src/modules/auth/{auth.service,auth.controller,auth.module}.ts`, `src/modules/auth/auth.service.spec.ts`, `memory.md`.
+- **Qué:** `UserDao.create(data, manager?)` y `UserService.create(dto, manager?, extra?)` (`extra` = `activationToken`/`activationTokenExpires` en el INSERT). `AuthService.register` genera el token antes, abre `dataSource.transaction` y crea usuario + membresía (`MembershipService.createForUser(id, manager)`); si la membresía falla el error se propaga y el usuario se revierte. Respuesta: `{ user, membership: { code, status }, activationToken? }`. `AuthModule` importa `MembershipModule`; `AuthService` inyecta `DataSource` y `MembershipService`.
+- **Por qué:** HU-006 (membresía Activa con código único creada junto al usuario); `db-use-transactions`.
+- **Impacto:** contrato de `POST /api/auth/register` (campo `membership`, avisar al frontend). Sin variables nuevas.
+- **Verificación:** `npm run test` ✅ (290/290) · `npm run lint` ✅ · `npm run build` ✅.
+- **Pendiente derivado:** pasos 4 a 6 (correo, verify-email, `POST /membership/create`).
 
 ### 2026-10-16 — feat(HU-006): entidad, DAO y service de membresía (paso 2 de 6, sin endpoint)
 - **Archivos:** `src/modules/membership/{membership.entity,membership.dao,membership.service,membership.module}.ts` y specs de dao y service (nuevos), `src/common/enums/domain.enums.ts` (`MembershipStatus`), `src/database.ts`, `memory.md`.
