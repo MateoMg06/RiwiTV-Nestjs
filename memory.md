@@ -76,6 +76,8 @@
 - HU-005: `POST /notifications/upcoming` responde 201 con `{id, userId, movieId, cityId, status, createdAt}`. Cuerpo `{movieId, cityId?}`; el usuario sale del token (`request.user.id`, 401 si falta). `cityId` es `null` si no llega (sin respaldo en la ciudad del usuario); si llega se valida con `CityDao.findById` (404 «Ciudad no encontrada»). Orden: película, ciudad, creación.
 - HU-005: `ReleaseNotification` con columnas planas (`userId`, `movieId`, `cityId`), sin relaciones TypeORM. `MovieModule` exporta `MovieDao`; `NotificationModule` importa `MovieModule` y `CountryModule`.
 - HU-005: seed con `releaseDays` opcional por película (default 30 UPCOMING, -60 resto): «Corazón de Barrio» +10, «El Regreso del Rey» +30, y al final «Estreno Vencido» (Acción, UPCOMING, -5; no debe salir) y «Última Frontera» (Acción, UPCOMING, +3). Las películas usan `refresh`, así que una BD ya sembrada toma las fechas nuevas.
+- HU-006: **el perfil es solo `User`** (decisión de la persona). No hay tablas Profile, preferencias, historial de compras ni billetera; «vacío» = sin filas. Se añaden a `User` `gender` (varchar 20, opcional) y `favoriteCinemaId` (int, opcional, sin relación). Desviación respecto a `agent.md` §1.2 (que habla de perfil, historial, billetera y preferencias).
+- HU-006: `favoriteCinemaId` y `cityId` inexistentes no se validan en el registro (ver Pendientes).
 
 ## Pendientes
 
@@ -100,6 +102,7 @@ Por historia:
 - [ ] HU-005 / RN-020: al hacer HU-006 (correo), añadir `NotificationStatus.SENT` y un `@Cron` (`@nestjs/schedule`) que busque solicitudes `PENDING` cuya `Movie.status = ACTIVE`, envíe el correo y las pase a `SENT`.
 - [ ] HU-005: prueba manual contra Postgres (`npm run build && npm run seed`; la tabla `ReleaseNotifications` la crea `synchronize`). Consultas: `GET /api/movies/upcoming` (orden: Última Frontera +3, Corazón de Barrio +10, El Regreso del Rey +30; sin «Estreno Vencido»), `/upcoming/<id>` (`daysUntilRelease`), `/upcoming/<id de Estreno Vencido o película activa>` (→ 404), `/upcoming/abc` (→ 400); con JWT `POST /api/notifications/upcoming` `{"movieId":<id>}` (201), repetido (409), `{"movieId":<activa>}` (404), `{"movieId":<id>,"cityId":9999}` (404), sin token (401).
 - [ ] HU-006: `register` crea `Profile`, `Membership` **Activa** con código único, historial vacío, billetera vacía y preferencias; correo de activación (nodemailer); `POST /auth/verify-email`; `POST /membership/create`; `CreateUserDto` con mínimo 10 caracteres.
+- [ ] HU-006: no se validan `cityId` ni `favoriteCinemaId` inexistentes en el registro (el `cityId` ya falla por FK; `favoriteCinemaId` no tiene relación).
 - [ ] HU-007: invalidar el refresh anterior en cada login (RN-030); login devuelve membresía, beneficios y perfil; `POST /auth/forgot-password` y `/reset-password` + `PasswordResetToken`; `AccessAudit` (IP y dispositivo) en login, login fallido, refresh, logout, reset y activación.
 - [ ] HU-008: `GET`/`PUT /profile`, `GET /membership`, `/membership/benefits`; reservas activas; cambio de correo con nueva validación.
 - [ ] HU-009: `GET /functions/:id`, `/prices`; solo funciones activas y no iniciadas.
@@ -126,7 +129,7 @@ No se implementa (no pertenece a HU-001 a HU-010):
 4. [x] `__dirname` en ESM — `src/config/config.service.ts`. (Resuelto por `35c326d`: el proyecto pasó a CommonJS.)
 5. [x] `.env` no se carga en `process.env` pero varios módulos lo leen de ahí — `database.ts`, `cors.ts`, `auth.service.ts`, `user.service.ts`.
 6. [x] `/user/:id` sin control de propiedad; `POST /user` sin `@Roles`; `+id` sin `ParseIntPipe` — `src/modules/user/user.controller.ts`.
-7. [ ] Política de contraseña inconsistente (DTO 8–72 vs validador ≥10 + complejidad). **Resuelto por el backlog (RN-022): mínimo 10.** Falta ajustar `CreateUserDto`.
+7. [x] Política de contraseña inconsistente (DTO 8–72 vs validador ≥10 + complejidad). Resuelto: `CreateUserDto` usa `@Length(10, 72)` (RN-022); `UpdateUserDto` lo hereda.
 8. [ ] `AuthPayload` declara `name`/`membership` que el token no trae.
 9. [ ] Credenciales de ejemplo de ObserveModule en `app.module.ts`; nombres de variables inconsistentes en `.env.example`.
 10. [ ] Captcha en memoria (no escala; limpieza nunca se ejecuta).
@@ -140,6 +143,22 @@ No se implementa (no pertenece a HU-001 a HU-010):
 18. [ ] HU-007: la respuesta de login no incluye membresía, beneficios ni datos del perfil — `src/modules/auth/auth.service.ts`.
 
 ## Registro de cambios
+
+### 2026-10-16 — fix(HU-006): contraseña mínima de 10 en el DTO y campos `gender`/`favoriteCinemaId` (paso 1 de 6)
+- **Archivos:** `src/modules/user/create-user.dto.ts`, `src/modules/user/user.entity.ts`, `src/modules/user/create-user.dto.spec.ts` (nuevo), `memory.md`.
+- **Qué:** `password` pasa de `@Length(8, 72)` a `@Length(10, 72)` (RN-022). `CreateUserDto` gana `gender?` (1–20) y `favoriteCinemaId?` (entero ≥ 1); `User` gana las columnas `gender` y `favoriteCinemaId` (nullable). `UpdateUserDto` deriva de `CreateUserDto`, así que hereda el mínimo 10. Spec nuevo: 9 caracteres falla, 10 pasa, opcionales ausentes, y `birthDate` como cadena JSON `"1995-05-20"` con `plainToInstance` (`enableImplicitConversion`, igual que el `ValidationPipe` de `main.ts`) + `validate`: pasa sin necesidad de `@Type(() => Date)`.
+- **Por qué:** bug #7 y RN-022; campos del formulario de registro de HU-006.
+- **Impacto:** contraseñas de 8–9 caracteres ya dan 400 en `POST /api/auth/register`; columnas nuevas en `Users` (`synchronize`, sin migración).
+- **Verificación:** `npm run test` ✅ (274/274, 5 nuevos) · `npm run lint` ✅ · `npm run build` ✅.
+- **Pendiente derivado:** pasos 2 a 6 de HU-006.
+
+### 2026-10-16 — chore(HU-001): `npm audit fix` sin `--force`
+- **Archivos:** `package-lock.json`
+- **Qué:** se actualizan dependencias transitivas dentro de los rangos de `package.json` (sin saltos de versión mayor): `@nestjs/platform-express` 12.1.3, `proxy-addr`, `multer`, `handlebars`, `fast-uri`, `source-map-js`, `brace-expansion`. `package.json` no cambia.
+- **Por qué:** `npm audit` reportaba 35 vulnerabilidades (2 críticas, 9 altas). Decisión de la persona: arreglar solo sin `--force`.
+- **Impacto:** ninguno en endpoints, BD ni variables de entorno. Dependencias de producción: `npm audit --omit=dev` → 0 vulnerabilidades.
+- **Verificación:** `npm run test` ✅ (269/269) · `npm run lint` ✅ · `npm run build` ✅.
+- **Pendiente derivado:** quedan 28 (2 bajas, 21 moderadas, 5 altas), todas en dependencias de desarrollo y solo arreglables con `--force` o quitando paquetes: `ts-node-dev` (`chokidar`/`braces`, sin arreglo), `@nestjs/mau` (`tmp`, `undici`; arreglo = bajar a 0.0.6) y `jest`/`ts-jest` (moderadas; el proyecto usa Vitest). Propuesta: quitar `jest`, `ts-jest`, `@types/jest` y `ts-node-dev` si nada los usa.
 
 ### 2026-10-15 — docs: backlog oficial en PDF
 - **Archivos:** `docs/Historia de usuario NodeJS Multicine Riwi (1).pdf`

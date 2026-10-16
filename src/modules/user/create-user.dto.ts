@@ -41,12 +41,12 @@ export class CreateUserDto {
   confirmEmail: string;
 
   /**
-   * Solo se guarda el hash. La longitud minima de 8 se aplica ANTES de
+   * Solo se guarda el hash. La longitud minima de 10 (RN-022) se aplica ANTES de
    * pasar por bcrypt: si se validara despues, el usuario ya estaria creado.
    */
   @IsNotEmpty()
   @IsString()
-  @Length(8, 72)
+  @Length(10, 72)
   password: string;
 
   @IsNotEmpty()
@@ -82,6 +82,18 @@ export class CreateUserDto {
   @IsNotEmpty()
   @IsDate()
   birthDate: Date;
+
+  @IsOptional()
+  @IsString()
+  @Length(1, 20)
+  gender?: string;
+
+  /** Cine favorito del formulario de registro (HU-006). Sin relacion ni validacion de existencia. */
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  favoriteCinemaId?: number;
 
   @IsOptional()
   @Type(() => Number)

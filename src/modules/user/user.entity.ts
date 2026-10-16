@@ -1,10 +1,4 @@
-import {
-  Column,
-  Entity,
-  JoinColumn,
-  ManyToOne,
-  PrimaryGeneratedColumn,
-} from 'typeorm';
+import { Column, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
 import { City } from '../country/city/city.entity.js';
 import { AccountStatus, Membership, UserRole } from '../../common/enums/domain.enums.js';
 
@@ -62,6 +56,12 @@ export class User {
 
   @Column({ nullable: true })
   cityId: number | null;
+
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  gender: string | null;
+
+  @Column({ type: 'int', nullable: true })
+  favoriteCinemaId: number | null;
 
   @Column({ default: false })
   acceptsDataProcessing: boolean;
