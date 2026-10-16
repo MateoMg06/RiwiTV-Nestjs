@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { DataSource, LessThan, Repository } from 'typeorm';
+import { DataSource, IsNull, LessThan, Repository } from 'typeorm';
 import { Session } from './entities/session.entity.js';
 
 @Injectable()
@@ -19,8 +19,12 @@ export class AuthDao {
     return this.sessionRepo.findOne({ where: { refreshTokenHash: hash } });
   }
 
+  /**
+   * `IsNull()` y no `undefined`: TypeORM descarta del WHERE las claves con
+   * `undefined`, y la consulta devolveria tambien las sesiones revocadas.
+   */
   findActiveSessions(userId: number): Promise<Session[]> {
-    return this.sessionRepo.find({ where: { userId, revokedAt: undefined } });
+    return this.sessionRepo.find({ where: { userId, revokedAt: IsNull() } });
   }
 
   async revokeSession(id: number): Promise<void> {
@@ -30,7 +34,7 @@ export class AuthDao {
   /** "Cerrar sesion en todos los dispositivos". */
   async revokeAllSessions(userId: number): Promise<void> {
     await this.sessionRepo.update(
-      { userId, revokedAt: undefined },
+      { userId, revokedAt: IsNull() },
       { revokedAt: new Date() },
     );
   }

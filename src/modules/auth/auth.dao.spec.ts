@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import type { DataSource, Repository } from 'typeorm';
+import { IsNull, type DataSource, type Repository } from 'typeorm';
 import { AuthDao } from './auth.dao.js';
 import type { Session } from './entities/session.entity.js';
 
@@ -7,11 +7,9 @@ import type { Session } from './entities/session.entity.js';
  * Tests del DAO de sesiones.
  *
  * El DAO es donde vive una parte ESCONDIDA de la seguridad: que condiciones
- * llevan las consultas. Aqui `revokedAt: undefined` NO es "sessions no
- * revocadas": en TypeORM un valor `undefined` dentro de `where` se descarta
- * silenciosamente de la clausula WHERE, asi que la consulta real sale como
- * `WHERE userId = ?`. Estos tests fijan el comportamiento observado para que el
- * cambio a `IsNull()` sea una decision consciente y no un accidente.
+ * llevan las consultas. "No revocada" se expresa con `revokedAt: IsNull()`:
+ * un `undefined` dentro de `where` se descartaria silenciosamente del WHERE y
+ * la consulta incluiria tambien las sesiones revocadas.
  */
 
 const buildSession = (overrides: Partial<Session> = {}): Session =>
@@ -101,25 +99,17 @@ describe('AuthDao', () => {
       const result = await dao.findActiveSessions(1);
 
       expect(repository.find).toHaveBeenCalledWith({
-        where: { userId: 1, revokedAt: undefined },
+        where: { userId: 1, revokedAt: IsNull() },
       });
       expect(result).toHaveLength(1);
     });
 
-    it('NO filtra revocadas en la base de datos: `revokedAt: undefined` se descarta del WHERE', async () => {
-      (repository.find as ReturnType<typeof vi.fn>).mockResolvedValue([
-        buildSession(),
-        buildSession({ id: 11, revokedAt: new Date() }),
-      ]);
+    it('filtra las revocadas en la base de datos con IsNull(), no con undefined', async () => {
+      await dao.findActiveSessions(1);
 
-      // Riesgo documentado, no afirmacion de que este bien: el metodo se llama
-      // "findActiveSessions" pero el filtro de revocadas no llega a la base de
-      // datos. Quien lo use debe filtrar por `revokedAt`/`isActive` en memoria,
-      // o el DAO debe pasar a `IsNull()`.
-      const result = await dao.findActiveSessions(1);
-
-      expect(result).toHaveLength(2);
-      expect(result[1].revokedAt).toBeInstanceOf(Date);
+      const [{ where }] = (repository.find as ReturnType<typeof vi.fn>).mock.calls[0];
+      expect(where.revokedAt).toEqual(IsNull());
+      expect(where.revokedAt).not.toBeUndefined();
     });
   });
 
@@ -138,16 +128,16 @@ describe('AuthDao', () => {
       await dao.revokeAllSessions(1);
 
       expect(repository.update).toHaveBeenCalledWith(
-        { userId: 1, revokedAt: undefined },
+        { userId: 1, revokedAt: IsNull() },
         { revokedAt: expect.any(Date) },
       );
     });
 
-    it('reafecta tambien las ya revocadas (el WHERE degenera en userId)', async () => {
+    it('no reescribe la fecha de las sesiones ya revocadas', async () => {
       await dao.revokeAllSessions(1);
 
       const criteria = (repository.update as ReturnType<typeof vi.fn>).mock.calls[0][0];
-      expect(criteria).toEqual({ userId: 1, revokedAt: undefined });
+      expect(criteria.revokedAt).toEqual(IsNull());
     });
   });
 

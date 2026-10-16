@@ -11,7 +11,7 @@
 | Auth: registro + activación | Implementado | Cuenta nace INACTIVA; token 24 h; sin envío de correo aún (nodemailer instalado, no usado) |
 | Auth: login | Implementado | Bloqueo 15 min tras `MAX_FAILED_ATTEMPTS`; hash ficticio anti-enumeración |
 | Auth: refresh con rotación | Implementado | Cookie `refresh_token` con path `/api/auth` |
-| Auth: logout / logout-all / me | Implementado | `revokeAllSessions` filtra mal (Bugs #3) |
+| Auth: logout / logout-all / me | Implementado | |
 | Usuarios: CRUD | Parcial | Falta control de propiedad y alinear contrato con la API original |
 | Rutas heredadas `/api/users/auth`, `/api/users/legacy-login` | No migradas | Pendiente confirmar si algún cliente las usa |
 | Migraciones / seeders | No existen | `synchronize: true` |
@@ -52,7 +52,7 @@
 
 1. [ ] `GET /auth/captcha` expone `answer` — `src/modules/auth/auth.controller.ts`, `src/common/utils/captcha.ts`.
 2. [x] Cookie `refresh_token` con `path: '/auth'` pero la ruta real es `/api/auth` — `auth.controller.ts`.
-3. [ ] `revokedAt: undefined` no filtra en TypeORM; usar `IsNull()` — `src/modules/auth/auth.dao.ts`.
+3. [x] `revokedAt: undefined` no filtra en TypeORM; usar `IsNull()` — `src/modules/auth/auth.dao.ts`.
 4. [ ] `__dirname` en ESM — `src/config/config.service.ts`.
 5. [ ] `.env` no se carga en `process.env` pero varios módulos lo leen de ahí — `database.ts`, `cors.ts`, `auth.service.ts`, `user.service.ts`.
 6. [ ] `/user/:id` sin control de propiedad; `POST /user` sin `@Roles`; `+id` sin `ParseIntPipe` — `src/modules/user/user.controller.ts`.
@@ -67,6 +67,14 @@
 15. [ ] Email no implementado (nodemailer instalado sin uso).
 
 ## Registro de cambios
+
+### 2026-10-15 — fix: `IsNull()` para filtrar sesiones no revocadas
+- **Archivos:** `src/modules/auth/auth.dao.ts`, `src/modules/auth/auth.dao.spec.ts`
+- **Qué:** `findActiveSessions` y `revokeAllSessions` filtran con `revokedAt: IsNull()`. Con `undefined` TypeORM quitaba la condición del WHERE: se devolvían sesiones revocadas y `logout-all` reescribía su fecha de revocación.
+- **Por qué:** Bug #3. Los tests que documentaban el comportamiento erróneo se sustituyen por tests del correcto.
+- **Impacto:** ninguno en el contrato HTTP.
+- **Verificación:** `npm run test` ✅ (104/104) · `npm run lint` ✅ · `npm run build` ✅ (ejecutados sobre el conjunto de arreglos de esta sesión).
+- **Pendiente derivado:** ninguno.
 
 ### 2026-10-15 — fix: cookie de refresh con path `/api/auth`
 - **Archivos:** `src/modules/auth/auth.controller.ts`, `src/modules/auth/auth.controller.spec.ts`
