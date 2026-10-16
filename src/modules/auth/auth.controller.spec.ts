@@ -18,7 +18,7 @@ import { UserRole } from '../../common/enums/domain.enums.js';
  * negocio correcta.
  */
 
-const ACCESS_COOKIE = 'access_token';
+const ACCESS_COOKIE = 'accessToken';
 const REFRESH_COOKIE = 'refresh_token';
 
 const tokens: AuthResponse = {

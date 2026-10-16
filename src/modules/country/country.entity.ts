@@ -1,21 +1,19 @@
 import { Column, Entity, OneToMany, PrimaryGeneratedColumn } from "typeorm";
-import { City } from "./city/city.entity.js";
-import { Department } from "./department/department.entity.js";
 
 @Entity("Countries")
 export class Country {
     @PrimaryGeneratedColumn()
     id: number
 
-    @Column()
+    @Column({ type: "boolean" })
     isActive: boolean
 
-    @Column()
+    @Column({ type: "varchar" })
     name: string
 
-    @OneToMany(() => City, (city) => city.country)
-    cities: City[]
+    @OneToMany("Cities", (city: any) => city.country)
+    cities: any[]
 
-    @OneToMany(() => Department, (department) => department.country)
-    departments: Department[]
+    @OneToMany("Departments", (department: any) => department.country)
+    departments: any[]
 }

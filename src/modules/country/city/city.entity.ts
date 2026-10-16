@@ -1,21 +1,19 @@
-import { Column, Entity, ManyToOne, OneToMany, PrimaryGeneratedColumn } from "typeorm";
-import { Country } from "../country.entity.js";
-import { Department } from "../department/department.entity.js";
+import { Column, Entity, ManyToOne, PrimaryGeneratedColumn } from "typeorm";
 
 @Entity("Cities")
 export class City {
     @PrimaryGeneratedColumn()
     id: number
 
-    @Column()
+    @Column({ type: "boolean" })
     isActive: boolean
 
-    @Column()
+    @Column({ type: "varchar" })
     name: string
 
-    @ManyToOne(() => Country)
-    country: Country
+    @ManyToOne("Countries")
+    country: any
 
-    @ManyToOne(() => Department, (department) => department.cities)
-    department: Department
+    @ManyToOne("Departments", (department: any) => department.cities)
+    department: any
 }

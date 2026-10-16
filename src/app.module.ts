@@ -19,8 +19,8 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
 @Module({
   imports: [
     ObserveModule.forRoot({
-      appKey: 'YOUR_APP_KEY',
-      appSecret: 'YOUR_APP_SECRET',
+      appKey: process.env.OBSERVER_APP_KEY ?? 'dev-app-key',
+      appSecret: process.env.OBSERVE_APP_SECRET ?? 'dev-app-secret',
       serviceId: 'riwi-tv-nestjs',
     }),
     DatabaseModule,

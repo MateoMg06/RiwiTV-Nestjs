@@ -1,0 +1,71 @@
+services:
+  app:
+    build: .
+    container_name: ${APP_CONTAINER_NAME:-riwi-tv-api}
+    working_dir: /usr/src/app
+
+    ports:
+      - "${APP_PORT:-5001}:${APP_PORT:-5001}"
+
+    env_file:
+      - ./.env
+
+    environment:
+      - NODE_ENV=${NODE_ENV}
+      - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:${POSTGRES_PORT:-5432}/${POSTGRES_DB}
+
+    depends_on:
+      db:
+        condition: service_healthy
+
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:$${APP_PORT:-5001}/api/docs || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+    deploy:
+      resources:
+        limits:
+          cpus: "${APP_CPU_LIMIT:-2}"
+          memory: ${APP_MEM_LIMIT:-512MB}
+    networks:
+      - backend
+
+  db:
+    image: postgres:15-alpine
+    container_name: ${DB_CONTAINER_NAME:-riwi-tv-db}
+    restart: always
+
+    ports:
+      - "${POSTGRES_HOST_PORT:-5433}:${POSTGRES_PORT:-5432}"
+
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+    volumes:
+      - db_data:/var/lib/postgresql/data
+
+    deploy:
+      resources:
+        limits:
+          cpus: "${DB_CPU_LIMIT:-2}"
+          memory: ${DB_MEM_LIMIT:-512MB}
+    networks:
+      - backend
+
+volumes:
+  db_data:
+
+networks:
+  backend:
+    driver: bridge

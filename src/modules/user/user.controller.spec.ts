@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { ForbiddenException } from '@nestjs/common';
 import { UserController } from './user.controller.js';
 import type { UserService } from './user.service.js';
 import { UserRole } from '../../common/enums/domain.enums.js';
@@ -7,10 +8,9 @@ import { UserRole } from '../../common/enums/domain.enums.js';
  * Tests de UserController.
  *
  * Este controller es la pieza que traduce "quien llama" en "sobre que datos
- * opera". Los tests de abajo fijan el comportamiento real e incluyen, marked
- * como `it.fails`, el comportamiento que DEBERIA existir. Si alguien corrige
- * el fallo de autorizacion, esos tests empiezan a fallar y avisan de que hay
- * que quitar la marca.
+ * opera". Incluye pruebas de autorizacion: un usuario autenticado solo puede
+ * leer, editar o borrar su propio perfil; solo un admin puede hacerlo con el
+ * de otros.
  */
 
 describe('UserController', () => {
@@ -63,17 +63,30 @@ describe('UserController', () => {
 
   describe('findOne', () => {
     it('convierte el id de la ruta a numero', async () => {
-      await controller.findOne('7');
+      await controller.findOne('7', { user: { id: 7, role: UserRole.ADMIN } } as any);
 
       expect(userService.findOne).toHaveBeenCalledWith(7);
     });
 
-    it.fails('deberia impedir leer el perfil de otro usuario', async () => {
-      // Actual: `GET /user/:id` no recibe la request, por lo que no puede
-      // comparar `:id` con el sujeto autenticado. IDOR por construccion.
-      const params = Reflect.getMetadata('__routeParams__', UserController.prototype.findOne, 'design:paramtypes');
-      expect(params).toBeDefined();
-      expect(params).toHaveLength(2);
+    it('impide leer el perfil de otro usuario', async () => {
+      const request = { user: { id: 1, role: UserRole.USUARIO } } as any;
+
+      expect(() => controller.findOne('7', request)).toThrow(ForbiddenException);
+      expect(userService.findOne).not.toHaveBeenCalled();
+    });
+
+    it('permite leer el propio perfil', async () => {
+      const request = { user: { id: 7, role: UserRole.USUARIO } } as any;
+
+      await controller.findOne('7', request);
+      expect(userService.findOne).toHaveBeenCalledWith(7);
+    });
+
+    it('permite a admin leer cualquier perfil', async () => {
+      const request = { user: { id: 1, role: UserRole.ADMIN } } as any;
+
+      await controller.findOne('7', request);
+      expect(userService.findOne).toHaveBeenCalledWith(7);
     });
   });
 
@@ -81,27 +94,33 @@ describe('UserController', () => {
     it('delega el id numerico y el DTO', async () => {
       const dto = { name: 'Ana Maria' } as never;
 
-      await controller.update('7', dto);
+      await controller.update('7', dto, { user: { id: 7, role: UserRole.ADMIN } } as any);
 
       expect(userService.update).toHaveBeenCalledWith(7, dto);
     });
 
-    it.fails('deberia impedir editar a otro usuario', async () => {
-      const guards = Reflect.getMetadata('__guards__', UserController.prototype.update) ?? [];
-      expect(guards).toContain(UserRole.ADMIN);
+    it('impide editar el perfil de otro usuario', async () => {
+      const request = { user: { id: 1, role: UserRole.USUARIO } } as any;
+
+      expect(() => controller.update('7', { name: 'X' }, request)).toThrow(
+        ForbiddenException,
+      );
+      expect(userService.update).not.toHaveBeenCalled();
     });
   });
 
   describe('remove', () => {
     it('delega el borrado con id numerico', async () => {
-      await controller.remove('7');
+      await controller.remove('7', { user: { id: 7, role: UserRole.ADMIN } } as any);
 
       expect(userService.remove).toHaveBeenCalledWith(7);
     });
 
-    it.fails('deberia impedir borrar a otro usuario', async () => {
-      const guards = Reflect.getMetadata('__guards__', UserController.prototype.remove) ?? [];
-      expect(guards).toContain(UserRole.ADMIN);
+    it('impide borrar el perfil de otro usuario', async () => {
+      const request = { user: { id: 1, role: UserRole.USUARIO } } as any;
+
+      expect(() => controller.remove('7', request)).toThrow(ForbiddenException);
+      expect(userService.remove).not.toHaveBeenCalled();
     });
   });
 });

@@ -5,7 +5,7 @@ import { CityService } from './city/city.service.js';
 @Injectable()
 export class CountryService  {
   constructor(private readonly departmentService: DepartmentService, private readonly cityService: CityService) {}
-  create(country: string) {
+  create(_country: string) {
     return "d"
   }
 
