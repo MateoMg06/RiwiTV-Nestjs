@@ -16,6 +16,17 @@ import { CreateUserDto } from './create-user.dto.js';
 import { UpdateUserDto } from './update-user.dto.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
 import { UserRole } from '../../common/enums/domain.enums.js';
+import {
+  ApiBadRequestResponse,
+  ApiConflictResponse,
+  ApiCreatedResponse,
+  ApiForbiddenResponse,
+  ApiNotFoundResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiTags,
+} from '@nestjs/swagger';
+import { ApiAuth } from '../../common/decorators/api-auth.decorator.js';
 
 interface Requester {
   id: number;
@@ -39,6 +50,8 @@ function ensureOwnOrAdmin(requester: Requester | null, targetId: number): void {
   }
 }
 
+@ApiTags('usuarios')
+@ApiAuth()
 @Controller('user')
 export class UserController {
   constructor(private readonly userService: UserService) {}
@@ -49,18 +62,41 @@ export class UserController {
    * permitiria saltarse ambos.
    */
   @Roles(UserRole.ADMIN)
+  @ApiOperation({
+    summary: 'Crear un usuario (admin)',
+    description:
+      'CRUD interno, sin historia. Solo `ADMIN`. El registro público es `POST /auth/register`.',
+  })
+  @ApiCreatedResponse({ description: 'Usuario creado.' })
+  @ApiBadRequestResponse({ description: 'Datos inválidos.' })
+  @ApiForbiddenResponse({ description: 'Se requiere rol ADMIN.' })
+  @ApiConflictResponse({ description: 'El correo o el documento ya están registrados.' })
   @Post()
   create(@Body() createUserDto: CreateUserDto) {
     return this.userService.create(createUserDto);
   }
 
   @Roles(UserRole.ADMIN)
+  @ApiOperation({
+    summary: 'Listar usuarios (admin)',
+    description: 'CRUD interno, sin historia. Solo `ADMIN`.',
+  })
+  @ApiOkResponse({ description: 'Lista de usuarios.' })
+  @ApiForbiddenResponse({ description: 'Se requiere rol ADMIN.' })
   @Get()
   findAll() {
     return this.userService.findAll();
   }
 
   @Roles(UserRole.ADMIN, UserRole.USUARIO)
+  @ApiOperation({
+    summary: 'Consultar un usuario',
+    description: 'CRUD interno, sin historia. El propio usuario o `ADMIN`.',
+  })
+  @ApiOkResponse({ description: 'Usuario.' })
+  @ApiBadRequestResponse({ description: 'El id no es numérico.' })
+  @ApiForbiddenResponse({ description: 'No puedes acceder a perfiles de otros usuarios.' })
+  @ApiNotFoundResponse({ description: 'Usuario no encontrado.' })
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number, @Req() request: Request) {
     ensureOwnOrAdmin(getRequester(request), id);
@@ -68,6 +104,16 @@ export class UserController {
   }
 
   @Roles(UserRole.ADMIN, UserRole.USUARIO)
+  @ApiOperation({
+    summary: 'Actualizar un usuario',
+    description:
+      'CRUD interno, sin historia. El propio usuario o `ADMIN`. El rol y `cityId` no se aceptan.',
+  })
+  @ApiOkResponse({ description: 'Usuario actualizado.' })
+  @ApiBadRequestResponse({ description: 'Datos inválidos.' })
+  @ApiForbiddenResponse({ description: 'No puedes acceder a perfiles de otros usuarios.' })
+  @ApiNotFoundResponse({ description: 'Usuario no encontrado.' })
+  @ApiConflictResponse({ description: 'El correo ya está en uso.' })
   @Patch(':id')
   update(
     @Param('id', ParseIntPipe) id: number,
@@ -79,6 +125,14 @@ export class UserController {
   }
 
   @Roles(UserRole.ADMIN, UserRole.USUARIO)
+  @ApiOperation({
+    summary: 'Eliminar un usuario',
+    description: 'CRUD interno, sin historia. El propio usuario o `ADMIN`.',
+  })
+  @ApiOkResponse({ description: 'Usuario eliminado, sin cuerpo.' })
+  @ApiBadRequestResponse({ description: 'El id no es numérico.' })
+  @ApiForbiddenResponse({ description: 'No puedes acceder a perfiles de otros usuarios.' })
+  @ApiNotFoundResponse({ description: 'Usuario no encontrado.' })
   @Delete(':id')
   remove(@Param('id', ParseIntPipe) id: number, @Req() request: Request) {
     ensureOwnOrAdmin(getRequester(request), id);

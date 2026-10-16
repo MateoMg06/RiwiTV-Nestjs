@@ -171,7 +171,7 @@ No se implementa (no pertenece a HU-001 a HU-010):
 9. [ ] Credenciales de ejemplo de ObserveModule en `app.module.ts`; nombres de variables inconsistentes en `.env.example`.
 10. [ ] Captcha en memoria (no escala; limpieza nunca se ejecuta).
 11. [ ] Sin migraciones (`synchronize: true`).
-12. [ ] Swagger con datos de relleno y puerto 3000 fijo en el log.
+12. [x] Swagger con datos de relleno y puerto 3000 fijo en el log. Resuelto: descripción real, tags por módulo, `addApiKey` eliminado y log de puerto quitado (lo imprime `main.ts` tras `listen`) — `src/config/swagger.ts`.
 13. [ ] `tsconfig.build.tsbuildinfo` versionado.
 14. [x] `.env.example` con secretos que parecen reales (JWT, Observe, `SEED_API_KEY`): reemplazar y rotar.
 15. [x] Email no implementado (nodemailer instalado sin uso). Resuelto en HU-006 con `MailService` (correo de activación; emulado si no hay `SMTP_HOST`).
@@ -182,6 +182,13 @@ No se implementa (no pertenece a HU-001 a HU-010):
 
 ## Registro de cambios
 
+### 2026-10-16 — docs(HU-001): Swagger documentado en todos los controllers (paso 2 de 4, bug #12)
+- **Archivos:** `src/config/swagger.ts`, `src/common/decorators/api-auth.decorator.ts` (+ spec), los 13 controllers (`app`, `auth`, `country/location`, `health`, `membership`, `movie`, `notification`, `profile`, `reservation` x2, `showtime/functions`, `user` x2), `src/modules/user/update-user.dto.ts`, `memory.md`.
+- **Qué:** descripción real de la API (rutas bajo `/api`, auth por Bearer o cookie `accessToken`, correo emulado, forma de los errores); se quita el `addApiKey` inexistente; tags por módulo con historia (`health`, `ubicación`, `películas`, `notificaciones`, `auth`, `membresía`, `perfil`, `funciones`, `reservas`, `usuarios`, `app`); `addBearerAuth()` + `addCookieAuth('accessToken')`; se elimina el log del puerto fijo (`main.ts` ya imprime la URL). Cada ruta lleva `@ApiOperation` (con HU/RN) y respuestas con los códigos reales leídos de los services y del guard. `@ApiAuth()` (nuevo, usado en 8 controllers/métodos) agrupa Bearer, cookie y 401. Login, refresh y logout documentan las cookies `accessToken` y `refresh_token`. `@ApiBody` en refresh/logout (el tipo unión no lo infiere el plugin) y `@ApiQuery` en `summary`. `UpdateUserDto` importa `PartialType`/`OmitType` de `@nestjs/swagger` (misma API que `@nestjs/mapped-types`, validación intacta) para que su esquema salga con propiedades.
+- **Por qué:** HU-001 RN-003, «Swagger publicado»; bug #12.
+- **Impacto:** solo documentación; ningún endpoint cambia de comportamiento.
+- **Verificación:** `npm run test` ✅ (530/530; +8 de `api-auth.decorator.spec.ts`) · `npm run lint` ✅ · `npm run build` ✅. Documento OpenAPI generado sin BD (como en el paso 1): 43 rutas, 43 con tag y ninguna en `default`, 43 con resumen, 17 protegidas con `security` (Bearer o cookie), 13 esquemas de DTO y todos con propiedades.
+- **Pendiente derivado:** README (paso 3) y archivo de memoria (paso 4).
 ### 2026-10-16 — build(HU-001): plugin de Swagger y se quita `swagger-jsdoc` (paso 1 de 4, Swagger publicado)
 - **Archivos:** `nest-cli.json`, `package.json`, `package-lock.json`, `memory.md`.
 - **Qué:** `nest-cli.json` activa el plugin `@nestjs/swagger` (`classValidatorShim`, `introspectComments`) para generar las propiedades de los DTO a partir de TypeScript y `class-validator`. `npm run build` pasa de `tsc` a `nest build -p tsconfig.build.json` (el plugin solo corre con el compilador de Nest). Se desinstalan `swagger-jsdoc` y `@types/swagger-jsdoc` (sin usos en `src`, `test` ni `docs`).

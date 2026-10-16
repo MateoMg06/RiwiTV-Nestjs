@@ -21,6 +21,19 @@ import type { AuthUser } from './interfaces/auth-response.interface.js';
 import type { AuthenticatedRequest } from './interfaces/authenticated-request.interface.js';
 import { MembershipStatus } from '../../common/enums/domain.enums.js';
 import { CaptchaChallenge } from '../../common/utils/captcha.js';
+import {
+  ApiBadRequestResponse,
+  ApiBody,
+  ApiConflictResponse,
+  ApiCreatedResponse,
+  ApiForbiddenResponse,
+  ApiNoContentResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiTags,
+  ApiUnauthorizedResponse,
+} from '@nestjs/swagger';
+import { ApiAuth } from '../../common/decorators/api-auth.decorator.js';
 
 /** Nombres de las cookies de sesion, centralizados para no desincronizarlos. */
 const ACCESS_COOKIE = 'accessToken';
@@ -31,6 +44,7 @@ const REFRESH_COOKIE = 'refresh_token';
  */
 const REFRESH_COOKIE_PATH = '/api/auth';
 
+@ApiTags('auth')
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
@@ -40,6 +54,11 @@ export class AuthController {
    * Publico porque se necesita antes de registrarse.
    */
   @Public()
+  @ApiOperation({
+    summary: 'Obtener un CAPTCHA',
+    description: 'HU-006. Público. Se necesita antes de registrarse.',
+  })
+  @ApiOkResponse({ description: '`{ token, question }`. La respuesta no se expone.' })
   @Get('captcha')
   async getCaptcha(): Promise<CaptchaChallenge> {
     return this.authService.getCaptcha();
@@ -58,6 +77,19 @@ export class AuthController {
    * admin en el registro.
    */
   @Public()
+  @ApiOperation({
+    summary: 'Registrar un usuario',
+    description:
+      'HU-006. Público. Exige la respuesta del CAPTCHA. Crea el usuario y su membresía Activa (RN-022: contraseña de al menos 10 caracteres con complejidad) y envía el correo de activación. Fuera de producción devuelve también `activationToken`.',
+  })
+  @ApiCreatedResponse({
+    description: '`{ user, membership: { code, status }, activationToken? }`.',
+  })
+  @ApiBadRequestResponse({
+    description:
+      'CAPTCHA requerido o incorrecto, o datos inválidos (contraseña, correos o contraseñas que no coinciden, consentimientos).',
+  })
+  @ApiConflictResponse({ description: 'El correo o el documento ya están registrados.' })
   @Post('register')
   async register(@Body() dto: RegisterDto): Promise<{
     user: AuthUser;
@@ -73,6 +105,14 @@ export class AuthController {
    * `verify-email` es la ruta del backlog (HU-006); `activate` se conserva como alias.
    */
   @Public()
+  @ApiOperation({
+    summary: 'Activar la cuenta (o confirmar un correo nuevo)',
+    description:
+      'HU-006 / RN-034. Público. `verify-email` es la ruta del backlog y `activate` es un alias con el mismo comportamiento. El token es de un solo uso.',
+  })
+  @ApiOkResponse({ description: '`{ user }` con la cuenta activa.' })
+  @ApiBadRequestResponse({ description: 'Token inválido o expirado.' })
+  @ApiConflictResponse({ description: 'El correo nuevo ya lo tomó otro usuario.' })
   @Post(['verify-email', 'activate'])
   @HttpCode(HttpStatus.OK)
   async activate(@Body() dto: ActivateAccountDto): Promise<{ user: AuthUser }> {
@@ -81,6 +121,18 @@ export class AuthController {
   }
 
   @Public()
+  @ApiOperation({
+    summary: 'Iniciar sesión',
+    description:
+      'HU-007. Público. Una sola sesión viva por usuario: cada login revoca las anteriores (RN-030). Bloqueo de 15 minutos tras 5 intentos fallidos. Emite las cookies httpOnly `accessToken` (path `/`) y `refresh_token` (path `/api/auth`).',
+  })
+  @ApiOkResponse({
+    description:
+      'Access token y refresh token, con `user`, `membership` y `benefits`. Además se emiten las cookies de sesión.',
+  })
+  @ApiBadRequestResponse({ description: 'Datos inválidos.' })
+  @ApiUnauthorizedResponse({ description: 'Correo o contraseña incorrectos.' })
+  @ApiForbiddenResponse({ description: 'Cuenta bloqueada temporalmente o no activada.' })
   @Post('login')
   @HttpCode(HttpStatus.OK)
   async login(
@@ -95,6 +147,13 @@ export class AuthController {
 
   /** Publico: quien olvido su contrasena no tiene sesion. Responde siempre igual (200). */
   @Public()
+  @ApiOperation({
+    summary: 'Solicitar el restablecimiento de contraseña',
+    description:
+      'HU-007. Público. Responde siempre 200 con el mismo mensaje, exista o no el correo.',
+  })
+  @ApiOkResponse({ description: '`{ message }`.' })
+  @ApiBadRequestResponse({ description: 'Correo con formato inválido.' })
   @Post('forgot-password')
   @HttpCode(HttpStatus.OK)
   async forgotPassword(@Body() dto: ForgotPasswordDto): Promise<{ message: string }> {
@@ -103,6 +162,16 @@ export class AuthController {
 
   /** Publico: la autorizacion es el token de un solo uso recibido por correo. */
   @Public()
+  @ApiOperation({
+    summary: 'Restablecer la contraseña',
+    description:
+      'HU-007. Público. El token llega por correo y es de un solo uso. Revoca todas las sesiones del usuario.',
+  })
+  @ApiOkResponse({ description: '`{ message }`.' })
+  @ApiBadRequestResponse({
+    description:
+      'Token inválido o expirado, contraseñas que no coinciden o contraseña que no cumple la política.',
+  })
   @Post('reset-password')
   @HttpCode(HttpStatus.OK)
   async resetPassword(
@@ -119,6 +188,14 @@ export class AuthController {
    * no se haya reutilizado.
    */
   @Public()
+  @ApiOperation({
+    summary: 'Renovar los tokens',
+    description:
+      'HU-007. Público a propósito: el access token ya expiró. Lee `refreshToken` del cuerpo o de la cookie `refresh_token`. Rota el refresh token; reutilizar uno revocado cierra todas las sesiones. Emite las cookies httpOnly `accessToken` (path `/`) y `refresh_token` (path `/api/auth`).',
+  })
+  @ApiOkResponse({ description: 'Nuevo par de tokens. Además se renuevan las cookies de sesión.' })
+  @ApiUnauthorizedResponse({ description: 'Refresh token ausente, inválido, revocado o expirado.' })
+  @ApiBody({ type: RefreshTokenDto, required: false })
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
   async refresh(
@@ -141,6 +218,13 @@ export class AuthController {
   }
 
   @Public()
+  @ApiOperation({
+    summary: 'Cerrar la sesión actual',
+    description:
+      'HU-007. Público. Lee `refreshToken` del cuerpo o de la cookie `refresh_token`; sin token también responde 204. Borra las cookies `accessToken` y `refresh_token`.',
+  })
+  @ApiNoContentResponse({ description: 'Sesión cerrada, sin cuerpo.' })
+  @ApiBody({ type: RefreshTokenDto, required: false })
   @Post('logout')
   @HttpCode(HttpStatus.NO_CONTENT)
   async logout(
@@ -161,6 +245,13 @@ export class AuthController {
   }
 
   /** Revoca todas las sesiones del usuario autenticado. */
+  @ApiAuth()
+  @ApiOperation({
+    summary: 'Cerrar todas las sesiones',
+    description:
+      'HU-007. Revoca todas las sesiones del usuario autenticado y borra las cookies `accessToken` y `refresh_token`.',
+  })
+  @ApiNoContentResponse({ description: 'Sesiones cerradas, sin cuerpo.' })
   @Post('logout-all')
   @HttpCode(HttpStatus.NO_CONTENT)
   async logoutAll(
@@ -177,6 +268,12 @@ export class AuthController {
   }
 
   /** Identidad del usuario autenticado, segun lo que afirma su access token. */
+  @ApiAuth()
+  @ApiOperation({
+    summary: 'Identidad del usuario autenticado',
+    description: 'Devuelve lo que afirma el access token.',
+  })
+  @ApiOkResponse({ description: '`{ id, email, role }`.' })
   @Get('me')
   me(@Req() request: AuthenticatedRequest): {
     id: number;
