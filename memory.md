@@ -8,7 +8,7 @@
 
 | HU | Estado | Hecho en Nest | Falta |
 |---|---|---|---|
-| HU-001 | Parcial | Capas, `.env` obligatorio, Docker Compose, Swagger, logger, Vitest, oxlint, Prettier, Helmet, CORS | `GET /api/v1/health` (200), migraciones automáticas al arrancar (hoy `synchronize: true`), ambientes Dev/QA/Prod |
+| HU-001 | Parcial | Capas, `.env` obligatorio, Docker Compose, Swagger, logger, Vitest, oxlint, Prettier, Helmet, CORS, `GET /api/v1/health` | Migraciones automáticas al arrancar (hoy `synchronize: true`), ambientes Dev/QA/Prod |
 | HU-002 | Parcial | Entidades Country/Department/City | Services stub, ruta `pais`; rutas `/countries`, `/departments/:countryId`, `/cities/:departmentId`; no permitir ciudades inactivas; ciudad con al menos un cine activo (RN-006); `POST /users/location` |
 | HU-003 | No iniciada | — | Movie, Showtime, Cinema (lectura); cartelera de 7 días y de hoy, solo funciones activas; filtros fecha, género, clasificación, idioma, tipo de sala, formato, complejo y "Disponible" (base en `origin/feature/movie-module`) |
 | HU-004 | No iniciada | — | Detalle completo (incluye precio por formato y calificación promedio), funciones futuras de la ciudad, recomendaciones |
@@ -38,6 +38,7 @@
 - Teléfono y documento como `string`.
 - Cookie del access token: `accessToken` (igual que el original).
 - `.env` obligatorio en todos los entornos; en Docker se monta como volumen.
+- HU-001: `HealthService` usa `DataSource` directamente (`SELECT 1`), sin DAO ni `@nestjs/terminus`: no hay entidad y sería una capa o dependencia con un solo uso (`agent.md` §4.1).
 
 ## Pendientes
 
@@ -47,7 +48,8 @@ Transversales:
 - [ ] Migrar tests de contrato del original (`hu001-hu010.routes.test.ts` y relacionados).
 
 Por historia:
-- [ ] HU-001: `GET /api/v1/health` (200); migración inicial TypeORM ejecutada al arrancar y quitar `synchronize: true`; seeders de demostración.
+- [x] HU-001: `GET /api/v1/health` (200).
+- [ ] HU-001: migración inicial TypeORM ejecutada al arrancar y quitar `synchronize: true`; seeders de demostración.
 - [ ] HU-002: completar Country/Department/City (solo lectura, activos, RN-006); `POST /users/location`.
 - [ ] HU-003: módulo Movie + Showtime + Cinema (lectura); cartelera de 7 días y de hoy; filtros (incluye "Disponible", RN-011).
 - [ ] HU-004: detalle completo con precio por formato; funciones futuras de la ciudad; recomendaciones.
@@ -87,6 +89,14 @@ No se implementa (no pertenece a HU-001 a HU-010):
 18. [ ] HU-007: la respuesta de login no incluye membresía, beneficios ni datos del perfil — `src/modules/auth/auth.service.ts`.
 
 ## Registro de cambios
+
+### 2026-10-15 — feat(HU-001): health check `GET /api/v1/health`
+- **Archivos:** `src/modules/health/health.module.ts`, `src/modules/health/health.controller.ts`, `src/modules/health/health.service.ts`, `src/modules/health/health.controller.spec.ts`, `src/modules/health/health.service.spec.ts`, `src/app.module.ts`, `docker-compose.yml`
+- **Qué:** nuevo endpoint público `GET /api/v1/health`. Responde siempre 200 con `{ status, service, version, environment, database, uptimeSeconds, timestamp }`; si Postgres no responde a `SELECT 1`, `status: 'degraded'` y `database: 'down'` (mismo contrato que el original). El healthcheck del contenedor `app` pasa de `/api/docs` a `/api/v1/health`.
+- **Por qué:** HU-001, criterio "Health Check responde HTTP 200" y endpoint `GET /api/v1/health` del backlog.
+- **Impacto:** endpoint nuevo `GET /api/v1/health` (sin token). Docker usa ese endpoint para marcar el contenedor como sano.
+- **Verificación:** `npm run test` ✅ (109/109, 5 nuevos) · `npm run lint` ✅ · `npm run build` ✅. Sin prueba manual: no hay Postgres levantado en esta máquina.
+- **Pendiente derivado:** probar con `docker compose up` que el contenedor queda `healthy`.
 
 ### 2026-10-15 — docs: alcance limitado a HU-001 a HU-010
 - **Archivos:** `agent.md`, `memory.md`
