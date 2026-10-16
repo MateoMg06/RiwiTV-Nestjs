@@ -52,6 +52,14 @@ export enum NotificationStatus {
   SENT = 'SENT',
 }
 
+/** Eventos de la auditoría de accesos (HU-007). */
+export enum AccessEvent {
+  LOGIN_SUCCESS = 'LOGIN_SUCCESS',
+  LOGIN_FAILED = 'LOGIN_FAILED',
+  ACCOUNT_LOCKED = 'ACCOUNT_LOCKED',
+  PASSWORD_RESET = 'PASSWORD_RESET',
+}
+
 /** Audio de una funcion. */
 export enum AudioType {
   DUBBED = 'DUBBED',

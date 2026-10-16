@@ -105,7 +105,7 @@ Todo: código, DTOs, entidades, tests, configuración, `.env.example`, dependenc
 Reglas clave del original que hay que conservar:
 - **HU-010:** transacción `SERIALIZABLE`, bloqueo de filas y actualización condicional `AVAILABLE → HELD`. Errores: 400 sin sillas o por encima del máximo, 404 función no disponible o sillas ajenas, 409 silla ya no disponible. Precio por silla = `showtime.price + seat.priceModifier`. Un proceso periódico libera bloqueos vencidos (en Nest: `@nestjs/schedule`).
 - **HU-006:** `register` crea `User` + `Profile` + `Membership` (pendiente hasta activar). La activación llega por correo (SMTP).
-- **HU-007:** la auditoría (`AccessAudit`) registra login, login fallido, refresh, logout, solicitud y uso de reset y activación.
+- **HU-007:** el original auditaba (`AccessAudit`) login, login fallido, refresh, logout, solicitud y uso de reset y activación. En Nest (tabla `AccessAudits`) se auditan `LOGIN_SUCCESS`, `LOGIN_FAILED`, `ACCOUNT_LOCKED` y `PASSWORD_RESET` (decisión de la persona).
 - El JWT se acepta por cookie **`accessToken`** o `Authorization: Bearer`.
 
 ### 1.3 Fuera de alcance (NO implementar)
@@ -259,7 +259,7 @@ El original montaba cada ruta con prefijo `/api`, `/api/v1` y sin prefijo. **Nes
 | HU-006 | `GET /api/auth/captcha`, `POST /api/auth/register` | ✅ |
 | HU-006 | `POST /api/auth/verify-email` (+ `GET`, y alias `/activate`) | `POST /api/auth/verify-email` y alias `POST /api/auth/activate` (implementados) |
 | HU-006 | `POST /membership/create` | `POST /api/membership/create` (JWT, 201 `{ code, status }`, 409 si ya tiene) implementado |
-| HU-007 | `POST /api/auth/login`, `/refresh`, `/logout` | ✅ (+ `logout-all`, `me`) |
+| HU-007 | `POST /api/auth/login`, `/refresh`, `/logout` | ✅ (+ `logout-all`, `me`); el login audita en `AccessAudits` |
 | HU-007 | `POST /api/auth/forgot-password`, `/reset-password` | `POST /api/auth/forgot-password` y `/reset-password` (públicos, 200) implementados |
 | HU-008 | `/api/profile`, `/api/membership`, `/benefits` | **No existe** |
 | HU-009 | `GET /api/functions/:id`, `/prices` | **No existe** |

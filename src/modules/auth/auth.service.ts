@@ -9,6 +9,7 @@ import { createHash, randomBytes } from 'crypto';
 import { DataSource } from 'typeorm';
 import { JwtPayload } from 'jsonwebtoken';
 import { AuthDao } from './auth.dao.js';
+import { AccessAuditDao } from './access-audit.dao.js';
 import { LoginDto } from './dto/login.dto.js';
 import { AuthResponse, AuthUser, LoginResponse } from './interfaces/auth-response.interface.js';
 import { UserService } from '../user/user.service.js';
@@ -22,7 +23,12 @@ import { Jwt } from '../../common/utils/jwt.js';
 import { TokenExpiry } from '../../common/utils/token-expiry.js';
 import { ConfigService } from '../../config/config.service.js';
 import { Config } from '../../config/config.keys.js';
-import { AccountStatus, MembershipStatus, UserRole } from '../../common/enums/domain.enums.js';
+import {
+  AccessEvent,
+  AccountStatus,
+  MembershipStatus,
+  UserRole,
+} from '../../common/enums/domain.enums.js';
 import { Captcha, CaptchaChallenge } from '../../common/utils/captcha.js';
 import { Password } from '../../common/utils/password.js';
 import { ResetPasswordDto } from './dto/reset-password.dto.js';
@@ -79,6 +85,7 @@ export class AuthService {
     private readonly membershipService: MembershipService,
     private readonly mail: MailService,
     private readonly password: Password,
+    private readonly accessAuditDao: AccessAuditDao,
   ) {
     this.saltRounds = Number(process.env.SALT_ROUNDS ?? DEFAULT_SALT_ROUNDS);
     this.maxFailedAttempts = Number(
@@ -214,15 +221,25 @@ export class AuthService {
     if (!user || !passwordMatches) {
       // RN-027: con el bloqueo vigente un fallo no suma ni reinicia `lockedUntil`
       // (si no, un atacante podria prolongar el bloqueo de la victima).
+      let locked = false;
       if (user && !this.isLocked(user)) {
-        await this.registerFailedAttempt(user);
+        locked = await this.registerFailedAttempt(user);
+      }
+      await this.audit(AccessEvent.LOGIN_FAILED, dto.email, user?.id ?? null, context);
+      if (user && locked) {
+        await this.audit(AccessEvent.ACCOUNT_LOCKED, dto.email, user.id, context);
       }
       // Mensaje unico para ambos casos: no revela si el correo existe.
       throw new UnauthorizedException('Correo o contrasena incorrectos');
     }
 
-    this.assertNotLocked(user);
-    this.assertIsActive(user);
+    try {
+      this.assertNotLocked(user);
+      this.assertIsActive(user);
+    } catch (error) {
+      await this.audit(AccessEvent.LOGIN_FAILED, dto.email, user.id, context);
+      throw error;
+    }
 
     // Login correcto: se limpia el contador de fallos y el bloqueo.
     await this.userDao.update(user.id, {
@@ -237,6 +254,8 @@ export class AuthService {
 
     const tokens = await this.issueTokens(user, context);
     const membership = await this.membershipService.findByUserId(user.id);
+
+    await this.audit(AccessEvent.LOGIN_SUCCESS, user.email, user.id, context);
 
     return {
       ...tokens,
@@ -284,7 +303,7 @@ export class AuthService {
    */
   async resetPassword(
     dto: ResetPasswordDto,
-    _context: SessionContext = {},
+    context: SessionContext = {},
   ): Promise<{ message: string }> {
     if (dto.password !== dto.confirmPassword) {
       throw new BadRequestException('Contraseñas no coinciden');
@@ -305,6 +324,7 @@ export class AuthService {
       resetTokenExpires: null,
     });
     await this.authDao.revokeAllSessions(user.id);
+    await this.audit(AccessEvent.PASSWORD_RESET, user.email, user.id, context);
 
     return { message: 'Contraseña actualizada' };
   }
@@ -450,8 +470,9 @@ export class AuthService {
    * El bloqueo es TEMPORAL, no permanente: un ataque automatizado contra una
    * cuenta real no debe dejar al usuario fuera para siempre. Al expirar
    * `lockedUntil`, el acceso se restaura y el contador ya quedo en cero.
+   * Devuelve `true` si este intento fijo el bloqueo.
    */
-  private async registerFailedAttempt(user: User): Promise<void> {
+  private async registerFailedAttempt(user: User): Promise<boolean> {
     const attempts = user.failedLoginAttempts + 1;
 
     const patch: Partial<User> = {
@@ -470,6 +491,31 @@ export class AuthService {
     }
 
     await this.userDao.update(user.id, patch);
+    return patch.lockedUntil !== undefined;
+  }
+
+  /**
+   * Auditoria de accesos (HU-007), fail-open: si no se puede guardar se registra el error y el
+   * flujo sigue; un fallo de la auditoria no debe impedir el login ni el reset. Nunca recibe
+   * contrasenas ni tokens.
+   */
+  private async audit(
+    event: AccessEvent,
+    email: string,
+    userId: number | null,
+    context: SessionContext,
+  ): Promise<void> {
+    try {
+      await this.accessAuditDao.create({
+        event,
+        email,
+        userId,
+        ip: context.ip ?? null,
+        userAgent: context.userAgent ?? null,
+      });
+    } catch (error) {
+      this.logger.error(`No se pudo guardar la auditoria ${event}: ${(error as Error).message}`);
+    }
   }
 
   private isLocked(user: User): boolean {

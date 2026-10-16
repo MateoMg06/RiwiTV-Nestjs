@@ -3,6 +3,8 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthController } from './auth.controller.js';
 import { AuthService } from './auth.service.js';
 import { AuthDao } from './auth.dao.js';
+import { AccessAuditDao } from './access-audit.dao.js';
+import { AccessAudit } from './entities/access-audit.entity.js';
 import { Session } from './entities/session.entity.js';
 import { MembershipModule } from '../membership/membership.module.js';
 import { UserModule } from '../user/user.module.js';
@@ -21,14 +23,14 @@ import { ConfigModule } from '../../config/config.module.js';
  */
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Session]),
+    TypeOrmModule.forFeature([Session, AccessAudit]),
     UserModule,
     MembershipModule,
     UtilsModule,
     ConfigModule,
   ],
   controllers: [AuthController],
-  providers: [AuthService, AuthDao],
+  providers: [AuthService, AuthDao, AccessAuditDao],
   exports: [AuthService],
 })
 export class AuthModule {}

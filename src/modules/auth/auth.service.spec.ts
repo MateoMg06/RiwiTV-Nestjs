@@ -6,6 +6,7 @@ import type { DataSource, EntityManager } from 'typeorm';
 import type { MembershipService } from '../membership/membership.service.js';
 import type { MailService } from '../../common/utils/mail.js';
 import type { AuthDao } from './auth.dao.js';
+import type { AccessAuditDao } from './access-audit.dao.js';
 import type { UserService } from '../user/user.service.js';
 import type { UserDao } from '../user/user.dao.js';
 import type { RegisterDto } from './dto/register.dto.js';
@@ -18,7 +19,12 @@ import { ConfigService } from '../../config/config.service.js';
 import { Captcha } from '../../common/utils/captcha.js';
 import { Password } from '../../common/utils/password.js';
 import { Config } from '../../config/config.keys.js';
-import { AccountStatus, MembershipStatus, UserRole } from '../../common/enums/domain.enums.js';
+import {
+  AccessEvent,
+  AccountStatus,
+  MembershipStatus,
+  UserRole,
+} from '../../common/enums/domain.enums.js';
 
 /**
  * Tests de la logica de autenticacion.
@@ -90,6 +96,7 @@ describe('AuthService', () => {
   let dataSource: DataSource;
   let membershipService: MembershipService;
   let mail: MailService;
+  let accessAuditDao: AccessAuditDao;
   let service: AuthService;
 
   beforeEach(() => {
@@ -153,6 +160,8 @@ describe('AuthService', () => {
       sendPasswordReset: vi.fn().mockResolvedValue(undefined),
     } as unknown as MailService;
 
+    accessAuditDao = { create: vi.fn().mockResolvedValue({}) } as unknown as AccessAuditDao;
+
     service = new AuthService(
       authDao,
       userService,
@@ -166,6 +175,7 @@ describe('AuthService', () => {
       membershipService,
       mail,
       new Password(),
+      accessAuditDao,
     );
   });
 
@@ -580,6 +590,126 @@ describe('AuthService', () => {
       await expect(
         service.login({ email: 'ana@example.com', password: 'la-correcta' }),
       ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+  });
+
+  describe('auditoria de accesos (HU-007)', () => {
+    const context = { ip: '10.0.0.1', userAgent: 'Mozilla/5.0' };
+    const created = () => (accessAuditDao.create as ReturnType<typeof vi.fn>).mock.calls;
+    const okLogin = () => {
+      vi.spyOn(bcrypt, 'comparePassword').mockResolvedValue(true);
+      const user = buildUser();
+      (userDao.findByEmailWithPassword as ReturnType<typeof vi.fn>).mockResolvedValue(user);
+      (userDao.update as ReturnType<typeof vi.fn>).mockResolvedValue(user);
+      return user;
+    };
+
+    it('LOGIN_SUCCESS con ip y userAgent', async () => {
+      okLogin();
+
+      await service.login({ email: 'ana@example.com', password: 'ok' }, context);
+
+      expect(created()).toEqual([
+        [
+          {
+            event: AccessEvent.LOGIN_SUCCESS,
+            email: 'ana@example.com',
+            userId: 1,
+            ip: '10.0.0.1',
+            userAgent: 'Mozilla/5.0',
+          },
+        ],
+      ]);
+    });
+
+    it('LOGIN_FAILED con credenciales invalidas (usuario existente y no existente)', async () => {
+      (userDao.findByEmailWithPassword as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+        buildUser(),
+      );
+      (userDao.update as ReturnType<typeof vi.fn>).mockResolvedValue(buildUser());
+      await service.login({ email: 'ana@example.com', password: 'mala' }, context).catch(() => {});
+
+      (userDao.findByEmailWithPassword as ReturnType<typeof vi.fn>).mockResolvedValueOnce(null);
+      await service
+        .login({ email: 'nadie@example.com', password: 'mala' }, context)
+        .catch(() => {});
+
+      expect(created()[0][0]).toMatchObject({
+        event: AccessEvent.LOGIN_FAILED,
+        userId: 1,
+        ip: '10.0.0.1',
+        userAgent: 'Mozilla/5.0',
+      });
+      expect(created()[1][0]).toMatchObject({
+        event: AccessEvent.LOGIN_FAILED,
+        email: 'nadie@example.com',
+        userId: null,
+      });
+    });
+
+    it('LOGIN_FAILED con cuenta inactiva y con cuenta bloqueada (contrasena correcta)', async () => {
+      vi.spyOn(bcrypt, 'comparePassword').mockResolvedValue(true);
+      (userDao.findByEmailWithPassword as ReturnType<typeof vi.fn>)
+        .mockResolvedValueOnce(buildUser({ accountStatus: AccountStatus.INACTIVE }))
+        .mockResolvedValueOnce(buildUser({ lockedUntil: new Date(Date.now() + 60_000) }));
+
+      await service.login({ email: 'ana@example.com', password: 'ok' }, context).catch(() => {});
+      await service.login({ email: 'ana@example.com', password: 'ok' }, context).catch(() => {});
+
+      expect(created().map(([row]) => row.event)).toEqual([
+        AccessEvent.LOGIN_FAILED,
+        AccessEvent.LOGIN_FAILED,
+      ]);
+      expect(created()[0][0]).toMatchObject({ ip: '10.0.0.1', userAgent: 'Mozilla/5.0' });
+    });
+
+    it('ACCOUNT_LOCKED cuando el fallo fija el bloqueo, ademas de LOGIN_FAILED', async () => {
+      const user = buildUser({ failedLoginAttempts: 4 });
+      (userDao.findByEmailWithPassword as ReturnType<typeof vi.fn>).mockResolvedValue(user);
+      (userDao.update as ReturnType<typeof vi.fn>).mockResolvedValue(user);
+
+      await service.login({ email: 'ana@example.com', password: 'mala' }, context).catch(() => {});
+
+      expect(created().map(([row]) => row.event)).toEqual([
+        AccessEvent.LOGIN_FAILED,
+        AccessEvent.ACCOUNT_LOCKED,
+      ]);
+      expect(created()[1][0]).toMatchObject({ userId: 1, ip: '10.0.0.1' });
+    });
+
+    it('PASSWORD_RESET al restablecer la contrasena', async () => {
+      (userDao.findByResetTokenHash as ReturnType<typeof vi.fn>).mockResolvedValue(
+        buildUser({ resetTokenExpires: new Date(Date.now() + 60_000) }),
+      );
+
+      await service.resetPassword(
+        { token: 'a'.repeat(64), password: 'NuevaClave1!', confirmPassword: 'NuevaClave1!' },
+        context,
+      );
+
+      expect(created()).toEqual([
+        [
+          {
+            event: AccessEvent.PASSWORD_RESET,
+            email: 'ana@example.com',
+            userId: 1,
+            ip: '10.0.0.1',
+            userAgent: 'Mozilla/5.0',
+          },
+        ],
+      ]);
+    });
+
+    it('fail-open: si guardar la auditoria falla, el login igual devuelve tokens', async () => {
+      okLogin();
+      (accessAuditDao.create as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('bd caida'));
+      const error = vi.spyOn(service['logger'], 'error').mockImplementation(() => undefined);
+
+      const result = await service.login({ email: 'ana@example.com', password: 'ok' }, context);
+
+      expect(result.accessToken).toEqual(expect.any(String));
+      expect(error).toHaveBeenCalledTimes(1);
+      expect(String(error.mock.calls[0][0])).not.toContain('ok');
     });
   });
 

@@ -9,6 +9,7 @@ import { Department } from './modules/country/department/department.entity.js';
 import { User } from './modules/user/user.entity.js';
 import { UserModule } from './modules/user/user.module.js';
 import { Session } from './modules/auth/entities/session.entity.js';
+import { AccessAudit } from './modules/auth/entities/access-audit.entity.js';
 import { Cinema } from './modules/cinema/cinema.entity.js';
 import { Movie } from './modules/movie/movie.entity.js';
 import { MovieModule } from './modules/movie/movie.module.js';
@@ -25,12 +26,30 @@ export const typeOrmOptions: DataSourceOptions = {
   username: process.env.POSTGRES_USER,
   password: process.env.POSTGRES_PASSWORD,
   database: process.env.POSTGRES_DB ?? process.env.DB_CONTAINER_NAME,
-  entities: [Country, City, Department, User, Session, Cinema, Movie, Showtime, ReleaseNotification, MembershipEntity],
+  entities: [
+    Country,
+    City,
+    Department,
+    User,
+    Session,
+    AccessAudit,
+    Cinema,
+    Movie,
+    Showtime,
+    ReleaseNotification,
+    MembershipEntity,
+  ],
   synchronize: true,
   migrations: [`${path.dirname(__filename)}/migrations/*{.ts,.js}`],
 };
 
 @Module({
-  imports: [TypeOrmModule.forRoot(typeOrmOptions), CountryModule, UserModule, MovieModule, NotificationModule],
+  imports: [
+    TypeOrmModule.forRoot(typeOrmOptions),
+    CountryModule,
+    UserModule,
+    MovieModule,
+    NotificationModule,
+  ],
 })
 export class DatabaseModule {}
