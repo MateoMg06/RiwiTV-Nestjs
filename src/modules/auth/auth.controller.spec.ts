@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import type { Request, Response } from 'express';
-import { UnauthorizedException } from '@nestjs/common';
+import { RequestMethod, UnauthorizedException } from '@nestjs/common';
+import { IS_PUBLIC_KEY } from '../../common/decorators/public.decorator.js';
 import { AuthController } from './auth.controller.js';
 import type { AuthService } from './auth.service.js';
 import type { AuthResponse } from './interfaces/auth-response.interface.js';
@@ -94,15 +95,21 @@ describe('AuthController', () => {
         new UnauthorizedException(),
       );
 
-      await expect(controller.register({} as never)).rejects.toBeInstanceOf(
-        UnauthorizedException,
-      );
+      await expect(controller.register({} as never)).rejects.toBeInstanceOf(UnauthorizedException);
     });
   });
 
   // ------------------------------------------------------------------ activate
 
   describe('activate', () => {
+    it('responde en POST verify-email y en el alias activate, 200 y público', () => {
+      const handler = AuthController.prototype.activate;
+      expect(Reflect.getMetadata('path', handler)).toEqual(['verify-email', 'activate']);
+      expect(Reflect.getMetadata('method', handler)).toBe(RequestMethod.POST);
+      expect(Reflect.getMetadata('__httpCode__', handler)).toBe(200);
+      expect(Reflect.getMetadata(IS_PUBLIC_KEY, handler)).toBe(true);
+    });
+
     it('envuelve el usuario activado en la forma { user }', async () => {
       (authService.activate as ReturnType<typeof vi.fn>).mockResolvedValue(tokens.user);
 
@@ -235,16 +242,9 @@ describe('AuthController', () => {
       (authService.refresh as ReturnType<typeof vi.fn>).mockResolvedValue(tokens);
       const response = buildResponse();
 
-      await controller.refresh(
-        { refreshToken: 'refresh-fake' },
-        buildRequest(),
-        response,
-      );
+      await controller.refresh({ refreshToken: 'refresh-fake' }, buildRequest(), response);
 
-      expect(authService.refresh).toHaveBeenCalledWith(
-        'refresh-fake',
-        expect.anything(),
-      );
+      expect(authService.refresh).toHaveBeenCalledWith('refresh-fake', expect.anything());
       expect(cookieByName(response, REFRESH_COOKIE)?.[2]).toMatchObject({
         httpOnly: true,
       });
@@ -258,10 +258,7 @@ describe('AuthController', () => {
 
       await controller.refresh(undefined, request, buildResponse());
 
-      expect(authService.refresh).toHaveBeenCalledWith(
-        'refresh-de-cookie',
-        expect.anything(),
-      );
+      expect(authService.refresh).toHaveBeenCalledWith('refresh-de-cookie', expect.anything());
     });
 
     it('responde 401 -no 400- cuando no hay token en ninguna parte', async () => {
@@ -276,9 +273,9 @@ describe('AuthController', () => {
     it('ignora una cookie de refresh vacia o no textual', async () => {
       const request = buildRequest({ cookies: { [REFRESH_COOKIE]: '' } });
 
-      await expect(
-        controller.refresh(undefined, request, buildResponse()),
-      ).rejects.toBeInstanceOf(UnauthorizedException);
+      await expect(controller.refresh(undefined, request, buildResponse())).rejects.toBeInstanceOf(
+        UnauthorizedException,
+      );
     });
   });
 
@@ -300,9 +297,7 @@ describe('AuthController', () => {
 
       // Sin token no es un error: el logout ya ocurrio. Propagar un 401 aqui
       // obliga al frontend a manejar un caso que en realidad es un exito.
-      await expect(
-        controller.logout(undefined, buildRequest(), response),
-      ).resolves.toBeUndefined();
+      await expect(controller.logout(undefined, buildRequest(), response)).resolves.toBeUndefined();
 
       expect(authService.logout).not.toHaveBeenCalled();
       expect(response.clearCookie).toHaveBeenCalledTimes(2);
@@ -346,9 +341,9 @@ describe('AuthController', () => {
     it('rechaza si la peticion llego sin identidad resuelta', async () => {
       const request = { headers: {}, user: undefined } as unknown as AuthenticatedRequest;
 
-      await expect(
-        controller.logoutAll(request, buildResponse()),
-      ).rejects.toBeInstanceOf(UnauthorizedException);
+      await expect(controller.logoutAll(request, buildResponse())).rejects.toBeInstanceOf(
+        UnauthorizedException,
+      );
 
       expect(authService.logoutAll).not.toHaveBeenCalled();
     });
@@ -380,11 +375,7 @@ describe('AuthController', () => {
 
       // La projection es explicita: aunque el payload tuviera campos de sobra,
       // el controller devuelve solo estos tres.
-      expect(Object.keys(controller.me(request)).sort()).toEqual([
-        'email',
-        'id',
-        'role',
-      ]);
+      expect(Object.keys(controller.me(request)).sort()).toEqual(['email', 'id', 'role']);
     });
   });
 });

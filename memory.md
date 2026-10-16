@@ -148,6 +148,14 @@ No se implementa (no pertenece a HU-001 a HU-010):
 
 ## Registro de cambios
 
+### 2026-10-16 — feat(HU-006): `POST /auth/verify-email` (paso 5 de 6)
+- **Archivos:** `src/modules/auth/auth.controller.ts`, `src/modules/auth/auth.controller.spec.ts`, `memory.md`.
+- **Qué:** el handler de activación pasa a `@Post(['verify-email', 'activate'])` (200, `@Public`). `verify-email` es la ruta del backlog; `activate` queda como alias para no romper al frontend actual. Sin cambios en el service.
+- **Por qué:** HU-006 (`POST /auth/verify-email`).
+- **Impacto:** ruta nueva `POST /api/auth/verify-email` (el cuerpo sigue siendo `{ token }`).
+- **Verificación:** `npm run test` ✅ (299/299) · `npm run lint` ✅ · `npm run build` ✅.
+- **Pendiente derivado:** paso 6.
+
 ### 2026-10-16 — feat(HU-006): correo de activación emulado (paso 4 de 6)
 - **Archivos:** `src/common/utils/{mail,mail.spec}.ts` (nuevos), `src/common/utils/utils.module.ts`, `src/config/config.keys.ts`, `.env.example`, `src/modules/auth/auth.service.ts`, `src/modules/auth/auth.service.spec.ts`, `memory.md`.
 - **Qué:** `MailService.sendActivation(to, name, token)` envía texto plano con el enlace `${FRONTEND_URL}/verify-email?token=…` (válido 24 h). Con `SMTP_HOST` usa SMTP (auth solo si hay `SMTP_USER`; `secure` si el puerto es 465); sin él usa `jsonTransport` y registra el envío como emulado. `UtilsModule` importa `ConfigModule` y exporta `MailService`. `AuthService.register` lo llama después de la transacción; si falla, registra el error sin token y devuelve el registro igualmente. Si la membresía falla no se envía correo.

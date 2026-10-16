@@ -68,9 +68,10 @@ export class AuthController {
   /**
    * Confirmacion de cuenta. Es publica porque el usuario aun no tiene sesion:
    * literalmente no puede autenticarse para activar su propia cuenta.
+   * `verify-email` es la ruta del backlog (HU-006); `activate` se conserva como alias.
    */
   @Public()
-  @Post('activate')
+  @Post(['verify-email', 'activate'])
   @HttpCode(HttpStatus.OK)
   async activate(@Body() dto: ActivateAccountDto): Promise<{ user: AuthUser }> {
     const user = await this.authService.activate(dto.token);
