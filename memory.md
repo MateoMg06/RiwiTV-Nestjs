@@ -180,6 +180,13 @@ No se implementa (no pertenece a HU-001 a HU-010):
 
 ## Registro de cambios
 
+### 2026-10-16 — feat(HU-010): job de vencimiento de bloqueos (paso 5 de 6)
+- **Archivos:** `src/modules/reservation/seat-lock-expiry.job.ts`, `seat-lock-expiry.job.spec.ts`, `reservation.module.ts`, `memory.md`.
+- **Qué:** `SeatLockExpiryJob` (`@Cron(EVERY_MINUTE, { name: 'seat-lock-expiry' })`) llama a `ReservationService.releaseExpired()`: las sillas `HELD` vencidas vuelven a `AVAILABLE` y se audita `EXPIRED` con el dueño previo. Guardia `running` (try/finally); un error se registra sin romper el planificador. Registrado en `ReservationModule`.
+- **Por qué:** HU-010, liberación automática. El mapa y `lockSeats` ya tratan las vencidas como libres sin esperar al job.
+- **Impacto:** tarea periódica nueva (cada minuto, zona horaria `TZ`). Pensado para una sola instancia.
+- **Verificación:** `npm run test` ✅ (522/522) · `npm run lint` ✅ · `npm run build` ✅
+- **Pendiente derivado:** seed y prueba manual (paso 6).
 ### 2026-10-16 — feat(HU-010): `ReservationService`, DTOs y controllers de sillas (paso 4 de 6)
 - **Archivos:** `src/modules/reservation/reservation.service.ts` (+spec), `lock-seats.dto.ts` (+spec, cubre también `release-seats.dto.ts`), `release-seats.dto.ts`, `seats.controller.ts` (+spec), `reservation.controller.ts` (+spec), `reservation.module.ts`, `src/app.module.ts`, `memory.md`.
 - **Qué:** `GET /api/functions/:id/seats` (público; HELD vencida se muestra AVAILABLE, nunca expone dueño ni vencimiento), `POST /api/reservations/lock-seats` (200 `{ functionId, seatIds, expiresAt }`), `DELETE /api/reservations/release-seats` (200 `{ functionId, released }`), `GET /api/reservations/summary?functionId=` (`{ functionId, seats[{seatId,row,number,type,price}], seatCount, total, expiresAt|null }`). Las tres de `reservations` exigen JWT; el usuario sale del token (401 si falta). Bloqueo todo o nada: 404 «Función no encontrada» / «Silla no encontrada», 409 «Una o más sillas ya no están disponibles», 400 «Máximo N sillas por función» (vigentes ∪ nuevas sin contar doble; máximo = `Showtimes.maxSeatsPerReservation` o `MAX_SEATS_PER_RESERVATION`). Re-bloqueo renueva todas las vigentes con un solo vencimiento (`SEAT_LOCK_MINUTES`) y audita `LOCKED`. Auditoría dentro de la misma transacción. `ReservationModule` importa `ShowtimeModule` y `ConfigModule` (sin ciclos) y está en `AppModule`. DTOs: `seatIds` 1–50 enteros ≥1 únicos.
