@@ -1,6 +1,6 @@
 import { Column, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
 import { City } from '../country/city/city.entity.js';
-import { AccountStatus, Membership, UserRole } from '../../common/enums/domain.enums.js';
+import { AccountStatus, UserRole } from '../../common/enums/domain.enums.js';
 
 /**
  * Aggregate de identidad y perfil.
@@ -74,9 +74,6 @@ export class User {
 
   @Column({ type: 'enum', enum: UserRole, default: UserRole.USUARIO })
   role: UserRole;
-
-  @Column({ type: 'enum', enum: Membership, default: Membership.BASICA })
-  membership: Membership;
 
   @Column({ type: 'enum', enum: AccountStatus, default: AccountStatus.INACTIVE })
   accountStatus: AccountStatus;

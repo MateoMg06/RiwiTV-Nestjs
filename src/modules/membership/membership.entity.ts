@@ -1,5 +1,5 @@
 import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn } from 'typeorm';
-import { MembershipStatus } from '../../common/enums/domain.enums.js';
+import { MembershipLevel, MembershipStatus } from '../../common/enums/domain.enums.js';
 
 /**
  * Membresía digital (HU-006). Una por usuario y con código único: ambos índices únicos
@@ -18,6 +18,9 @@ export class Membership {
 
   @Column({ type: 'enum', enum: MembershipStatus, default: MembershipStatus.ACTIVE })
   status: MembershipStatus;
+
+  @Column({ type: 'enum', enum: MembershipLevel, default: MembershipLevel.BRONCE })
+  level: MembershipLevel;
 
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;

@@ -9,9 +9,12 @@ export enum UserRole {
   USUARIO = 'usuario',
 }
 
-export enum Membership {
-  BASICA = 'básica',
-  PLATA = 'plata',
+/** Nivel de la membresía (HU-008). Todas nacen en `BRONCE`. */
+export enum MembershipLevel {
+  BRONCE = 'BRONCE',
+  PLATA = 'PLATA',
+  ORO = 'ORO',
+  PLATINO = 'PLATINO',
 }
 
 export enum AccountStatus {

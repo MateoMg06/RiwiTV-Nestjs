@@ -112,7 +112,7 @@ Por historia:
 - [ ] HU-006: prueba manual contra Postgres (`Memberships` y las columnas nuevas de `Users` las crea `synchronize`): `GET /api/auth/captcha` y `POST /api/auth/register` (201 con `membership.code`; el log muestra «Correo emulado» con el enlace), `POST /api/auth/verify-email` `{"token":…}` (200) y repetido (400), login, `POST /api/membership/create` con JWT (409, ya tiene), sin token (401), contraseña de 9 caracteres (400).
 - [ ] HU-006: para probar SMTP real, definir `SMTP_HOST` y compañía en el `.env`.
 - [ ] HU-006: no se validan `cityId` ni `favoriteCinemaId` inexistentes en el registro (el `cityId` ya falla por FK; `favoriteCinemaId` no tiene relación).
-- [ ] HU-008: el enum `Membership` (BASICA/PLATA) y `User.membership` no se tocaron en HU-006; HU-008 (niveles Bronce/Plata/Oro/Platino) debe decidir si se reemplazan o se eliminan.
+- [x] HU-008: el enum `Membership` (BASICA/PLATA) y `User.membership` se eliminaron; los niveles viven en `Memberships.level`.
 - [x] HU-007: RN-030 (una sesión viva), login con membresía, `POST /auth/forgot-password` y `/reset-password` (el token vive en columnas de `User`, `resetToken`/`resetTokenExpires`: no hace falta tabla `PasswordResetToken`).
 - [x] HU-007: auditoría de accesos (`AccessAudits`).
 - [ ] HU-007: `benefits` reales en el login (los rellena HU-008; hoy `[]`).
@@ -158,6 +158,14 @@ No se implementa (no pertenece a HU-001 a HU-010):
 19. [x] HU-006: el token de activación se guardaba **en claro** (`User.activationToken`); `agent.md` §4.8 exige SHA-256. Resuelto: `register` guarda `hashToken(token)` y `activate` busca por el hash — `auth.service.ts`, `user.dao.ts`.
 
 ## Registro de cambios
+
+### 2026-10-16 — feat(HU-008): niveles de membresía y descuentos; se elimina `User.membership` (paso 1 de 6)
+- **Archivos:** `src/common/enums/domain.enums.ts`, `src/modules/user/user.entity.ts`, `src/modules/membership/membership.entity.ts`, `src/modules/membership/membership-benefits.ts` (+spec), `memory.md`.
+- **Qué:** enum `MembershipLevel` (BRONCE, PLATA, ORO, PLATINO); se elimina el enum `Membership` (BASICA/PLATA) y la columna `Users.membership`. `Memberships.level` (enum, default BRONCE). `membership-benefits.ts`: `DISCOUNT_BY_LEVEL` (0/5/10/15, RN-032), `discountFor`, tipo `Benefit` y `benefitsFor(level)` (se usará en `/membership/benefits` y en el login).
+- **Por qué:** HU-008 (nivel y descuentos por nivel). Resuelve el pendiente sobre el enum `Membership`.
+- **Impacto:** BD: `synchronize` **borra la columna `Users.membership`** (y su enum) y añade `Memberships.level` con BRONCE para las filas existentes. Sin cambios de endpoints.
+- **Verificación:** `npm run test` ✅ (367/367) · `npm run lint` ✅ · `npm run build` ✅.
+- **Pendiente derivado:** pasos 2 a 6.
 
 ### 2026-10-16 — fix(HU-006): token de activación guardado como SHA-256 (bug #19)
 - **Archivos:** `src/modules/auth/auth.service.ts` (+spec), `src/modules/user/user.dao.ts` (comentario y parámetro de `findByActivationToken`), `memory.md`.
