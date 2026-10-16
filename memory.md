@@ -102,7 +102,7 @@ Por historia:
 - [x] HU-004: detalle, funciones futuras y recomendaciones.
 - [ ] HU-004: prueba manual contra Postgres (`npm run build && npm run seed`; las columnas nuevas las crea `synchronize`; sin seed las películas previas tienen sinopsis `''`, `cast` `[]` y precio 0). Consultas: `GET /api/movies/<id>` (Noche en Medellín: `prices` 2D 14000 / 3D 17000 si no se filtra ciudad; con `?cityId=<Itagüí>` solo 3D 17000), `/<id>/functions?cityId=`, `/<id>/recommendations` (Noche → Sombras del Pasado primero, 4.5), id de película próxima o inactiva (→ 404), `/abc` (→ 400), `?cityId=0` (→ 400).
 - [x] HU-005: próximos estrenos, contador regresivo y `POST /notifications/upcoming` sin duplicados.
-- [ ] HU-005 / RN-020: ya existe `MailService` (HU-006); añadir `NotificationStatus.SENT` y un `@Cron` (`@nestjs/schedule`) que busque solicitudes `PENDING` cuya `Movie.status = ACTIVE`, envíe el correo y las pase a `SENT`.
+- [ ] HU-005 / RN-020 (en curso, ver Registro): ya existe `MailService` (HU-006); añadir `NotificationStatus.SENT` y un `@Cron` (`@nestjs/schedule`) que busque solicitudes `PENDING` cuya `Movie.status = ACTIVE`, envíe el correo y las pase a `SENT`.
 - [ ] HU-005: prueba manual contra Postgres (`npm run build && npm run seed`; la tabla `ReleaseNotifications` la crea `synchronize`). Consultas: `GET /api/movies/upcoming` (orden: Última Frontera +3, Corazón de Barrio +10, El Regreso del Rey +30; sin «Estreno Vencido»), `/upcoming/<id>` (`daysUntilRelease`), `/upcoming/<id de Estreno Vencido o película activa>` (→ 404), `/upcoming/abc` (→ 400); con JWT `POST /api/notifications/upcoming` `{"movieId":<id>}` (201), repetido (409), `{"movieId":<activa>}` (404), `{"movieId":<id>,"cityId":9999}` (404), sin token (401).
 - [x] HU-006: registro transaccional con membresía Activa, correo de activación (emulado), `POST /auth/verify-email`, `POST /membership/create`, contraseña mínima 10.
 - [ ] HU-006: prueba manual contra Postgres (`Memberships` y las columnas nuevas de `Users` las crea `synchronize`): `GET /api/auth/captcha` y `POST /api/auth/register` (201 con `membership.code`; el log muestra «Correo emulado» con el enlace), `POST /api/auth/verify-email` `{"token":…}` (200) y repetido (400), login, `POST /api/membership/create` con JWT (409, ya tiene), sin token (401), contraseña de 9 caracteres (400).
@@ -149,6 +149,14 @@ No se implementa (no pertenece a HU-001 a HU-010):
 18. [ ] HU-007: la respuesta de login no incluye membresía, beneficios ni datos del perfil — `src/modules/auth/auth.service.ts`.
 
 ## Registro de cambios
+
+### 2026-10-16 — build(HU-005): `@nestjs/schedule` y `NotificationStatus.SENT` (paso 1 de 5 de RN-020)
+- **Archivos:** `package.json`, `package-lock.json`, `src/common/enums/domain.enums.ts`, `memory.md`.
+- **Qué:** se instala `@nestjs/schedule` 12.0.2 (peerDependencies `@nestjs/core`/`common` `^11 || ^12`, compatible con `^12.0.1`; sin `--force` ni `--legacy-peer-deps`). `NotificationStatus` gana `SENT`.
+- **Por qué:** RN-020 (correo al pasar la película a "En Cartelera") necesita un `@Cron`; la dependencia ya estaba justificada en `agent.md` §4.1. `SENT` se usa desde el paso 4.
+- **Impacto:** el enum `ReleaseNotifications.status` de Postgres gana un valor. Una BD ya creada necesita `ALTER TYPE "ReleaseNotifications_status_enum" ADD VALUE 'SENT';` (o recrearse; `synchronize` no siempre añade valores a un enum existente). Sin variables de entorno nuevas.
+- **Verificación:** `npm run test` ✅ (305/305) · `npm run lint` ✅ · `npm run build` ✅.
+- **Pendiente derivado:** pasos 3 a 5 (correo, DAO, job).
 
 ### 2026-10-16 — feat(HU-006): `POST /membership/create` (paso 6 de 6)
 - **Archivos:** `src/modules/membership/{membership.controller,membership.controller.spec,membership.service,membership.service.spec,membership.module}.ts`, `agent.md` (§5.1, §5.3, §5.4), `memory.md`.
