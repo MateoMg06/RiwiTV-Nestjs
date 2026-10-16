@@ -1,114 +1,195 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# RiwiTV — API de Multicine (NestJS)
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+Backend de la plataforma de cine **Multicine RiwiTV**. Es la migración del proyecto original (Node/Express + Sequelize) a **NestJS + TypeORM**. El alcance son las historias de usuario **HU-001 a HU-010** (`docs/historias-de-usuario.md`); el resto del backlog (HU-011 a HU-029) no se implementa.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## Estado por historia
 
-## Description
+| HU     | Tema                                                                | Estado                                                      |
+| ------ | ------------------------------------------------------------------- | ----------------------------------------------------------- |
+| HU-001 | Arquitectura, entorno, Docker, health, Swagger, logger, tests, lint | Parcial: faltan migraciones automáticas (hoy `synchronize`) |
+| HU-002 | Países, departamentos, ciudades, ubicación del usuario              | Completa salvo prueba manual                                |
+| HU-003 | Cartelera semanal y de hoy con filtros                              | Completa salvo prueba manual                                |
+| HU-004 | Detalle de película, funciones y recomendaciones                    | Completa salvo prueba manual                                |
+| HU-005 | Próximos estrenos y aviso por correo                                | Completa salvo prueba manual                                |
+| HU-006 | Registro, activación de cuenta y membresía                          | Completa salvo prueba manual                                |
+| HU-007 | Login, refresh, logout, recuperación de contraseña y auditoría      | Completa salvo prueba manual                                |
+| HU-008 | Perfil, membresía y beneficios                                      | Completa salvo prueba manual                                |
+| HU-009 | Detalle y precio de funciones                                       | Completa salvo prueba manual                                |
+| HU-010 | Mapa de sillas, bloqueo, liberación y resumen                       | Completa salvo prueba manual                                |
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+La prueba manual contra PostgreSQL real está pendiente en todas: los tests usan dobles, sin base de datos. El detalle vive en `memory.md`.
 
-## Project setup
+## Stack
 
-```bash
-$ npm install
-```
+- Node 22 (CommonJS) y NestJS 12
+- TypeORM con PostgreSQL 15 (en Docker)
+- `class-validator` / `class-transformer`, `helmet`, `cors`, `cookie-parser`
+- `jsonwebtoken` y `bcryptjs` para la autenticación
+- `@nestjs/schedule` (tareas programadas) y `nodemailer` (correo)
+- `@nestjs/swagger` (documentación)
+- Vitest (tests), oxlint (lint) y Prettier (formato)
 
-## Compile and run the project
+## Puesta en marcha
 
-```bash
-# development
-$ npm run start
+### Requisitos
 
-# watch mode
-$ npm run start:dev
+- Node 22 y npm
+- Docker y Docker Compose (o un PostgreSQL propio)
 
-# production mode
-$ npm run start:prod
-```
+### Variables de entorno
 
-## Run tests
+El archivo `.env` es **obligatorio**: sin él la aplicación no arranca (`src/config/load-env.ts`). Cópialo de la plantilla y completa los valores; nunca lo subas al repositorio.
 
 ```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+cp .env.example .env
 ```
 
-## Deployment
+Variables clave, por grupo (los valores de ejemplo están en `.env.example`):
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+| Grupo                   | Variables                                                                                                                                                                                                                    |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| PostgreSQL              | `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_HOST_PORT`. Con Docker Compose el host es `db`; fuera de Docker usa `localhost` y el puerto expuesto (`POSTGRES_HOST_PORT`) |
+| Aplicación              | `APP_PORT`, `NODE_ENV`, `TZ` (define «hoy» y los 7 días de la cartelera)                                                                                                                                                     |
+| CORS                    | `CORS_ORIGIN`: orígenes separados por coma; vacío permite cualquiera                                                                                                                                                         |
+| JWT                     | `JWT_SECRET` y `JWT_REFRESH_SECRET` (distintos entre sí), `JWT_ACCESS_EXPIRES_IN`, `JWT_REFRESH_EXPIRES_IN`, `SALT_ROUNDS`, `MAX_FAILED_ATTEMPTS`, `RESET_TOKEN_EXPIRES_IN`                                                  |
+| Correo                  | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM`. Con `SMTP_HOST` vacío el correo es emulado. `FRONTEND_URL` es la base de los enlaces de los correos                                                         |
+| Sillas                  | `SEAT_LOCK_MINUTES` (bloqueo, 10 por defecto), `MAX_SEATS_PER_RESERVATION` (máximo si la función no define el suyo, 8 por defecto)                                                                                           |
+| Observabilidad y Docker | `OBSERVER_APP_KEY`, `OBSERVE_APP_SECRET` y los límites `*_CPU_LIMIT` / `*_MEM_LIMIT`                                                                                                                                         |
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+### Con Docker Compose
 
 ```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+docker compose up --build
+docker compose exec app npm run seed   # datos de demostración (idempotente)
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+### En local
 
-## Observability
+Necesitas un PostgreSQL accesible con los datos del `.env`. Puedes levantar solo la base con `docker compose up db` y usar `POSTGRES_HOST=localhost` y `POSTGRES_PORT=5433`.
 
-In production applications, observability is essential for understanding how your system behaves, detecting issues early, and maintaining reliable performance.
+```bash
+npm install
+npm run start:dev          # desarrollo con recarga
+npm run build && npm run seed
+```
 
-[NestJS Observe](https://observe.nestjs.com) automatically instruments your NestJS application, giving you deep visibility into your system with minimal setup:
+> **Esquema de base de datos:** todavía no hay migraciones. TypeORM crea y modifica las tablas con `synchronize: true` al arrancar. No lo uses con datos que importen.
 
-- **Distributed tracing:** Follow requests across services and understand how they flow through your system.
-- **Waterfall analysis:** Visualize request execution and identify slow operations, bottlenecks, and unexpected delays.
-- **Performance analysis:** Analyze application performance in real time and quickly pinpoint areas that need optimization.
-- **Metrics:** Track key application and infrastructure metrics to understand system health and performance trends.
-- **Logging:** Centralize and correlate logs with traces and other telemetry to make debugging easier.
-- **Error tracking:** Detect errors quickly and investigate their root causes with the surrounding context.
-- **SLA monitoring:** Track service-level objectives and identify when your application is approaching or exceeding defined thresholds.
-- **Alarms and alerts:** Set up alerts for critical errors, performance degradation, SLA violations, and other anomalies so your team can react quickly.
+## Scripts de npm
 
-## Resources
+| Script                                                    | Qué hace                                                              |
+| --------------------------------------------------------- | --------------------------------------------------------------------- |
+| `npm run start` / `start:dev` / `start:debug`             | Arranca con Nest (normal, con recarga, con depurador)                 |
+| `npm run start:prod`                                      | Ejecuta `dist/main.js`                                                |
+| `npm run build`                                           | `nest build` con `tsconfig.build.json` (incluye el plugin de Swagger) |
+| `npm run seed`                                            | Carga datos de demostración desde `dist/` (hay que compilar antes)    |
+| `npm run test` / `test:watch` / `test:cov` / `test:debug` | Tests con Vitest                                                      |
+| `npm run test:e2e`                                        | Vitest con `vitest.config.e2e.ts` (hoy no hay pruebas e2e)            |
+| `npm run lint`                                            | `oxlint src/ test/`                                                   |
+| `npm run format`                                          | Prettier sobre `src/` y `test/`                                       |
+| `npm run deploy`                                          | `nest deploy`                                                         |
 
-Check out a few resources that may come in handy when working with NestJS:
+## API
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Auto-instrument your application with [NestJS Observer](https://observer.nestjs.com). Distributed tracing, metrics, and logging made easy. Error tracking and performance monitoring for your NestJS applications.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+- Prefijo global: `/api`.
+- Swagger: **`/api/docs`** (JSON en `/api/docs-json`). Se genera a partir de los decoradores y de los DTO.
+- Health check: **`GET /api/v1/health`**. Es la única ruta versionada; responde 200 aunque la base de datos esté caída (`status: degraded`).
+- Errores: `{ statusCode, message, path, timestamp }`.
 
-## Support
+### Endpoints por historia
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+«JWT» significa `Authorization: Bearer <token>` o cookie `accessToken`. Todo lo que no es `@Public()` exige JWT.
 
-## Stay in touch
+| HU      | Método y ruta                                                   | Auth                             |
+| ------- | --------------------------------------------------------------- | -------------------------------- |
+| HU-001  | `GET /api/v1/health`                                            | Pública                          |
+| HU-001  | `GET /api` (texto fijo)                                         | Pública                          |
+| HU-002  | `GET /api/countries`                                            | Pública                          |
+| HU-002  | `GET /api/departments/:countryId`                               | Pública                          |
+| HU-002  | `GET /api/cities/:departmentId` (solo activas)                  | Pública                          |
+| HU-002  | `POST /api/users/location`                                      | JWT                              |
+| HU-003  | `GET /api/movies`, `/movies/weekly`, `/movies/filter` (7 días)  | Pública                          |
+| HU-003  | `GET /api/movies/today`                                         | Pública                          |
+| HU-004  | `GET /api/movies/:id`                                           | Pública                          |
+| HU-004  | `GET /api/movies/:id/functions`                                 | Pública                          |
+| HU-004  | `GET /api/movies/:id/recommendations`                           | Pública                          |
+| HU-005  | `GET /api/movies/upcoming`, `/movies/upcoming/:id`              | Pública                          |
+| HU-005  | `POST /api/notifications/upcoming`                              | JWT                              |
+| HU-006  | `GET /api/auth/captcha`                                         | Pública                          |
+| HU-006  | `POST /api/auth/register`                                       | Pública                          |
+| HU-006  | `POST /api/auth/verify-email` (alias `POST /api/auth/activate`) | Pública                          |
+| HU-006  | `POST /api/membership/create`                                   | JWT                              |
+| HU-007  | `POST /api/auth/login`                                          | Pública                          |
+| HU-007  | `POST /api/auth/refresh`                                        | Pública (usa el refresh token)   |
+| HU-007  | `POST /api/auth/logout`                                         | Pública (usa el refresh token)   |
+| HU-007  | `POST /api/auth/logout-all`, `GET /api/auth/me`                 | JWT                              |
+| HU-007  | `POST /api/auth/forgot-password`, `/auth/reset-password`        | Pública                          |
+| HU-008  | `GET /api/profile`, `PUT /api/profile`                          | JWT                              |
+| HU-008  | `GET /api/membership`, `GET /api/membership/benefits`           | JWT                              |
+| HU-009  | `GET /api/functions/:id`, `GET /api/functions/:id/prices`       | Pública                          |
+| HU-010  | `GET /api/functions/:id/seats`                                  | Pública                          |
+| HU-010  | `POST /api/reservations/lock-seats`                             | JWT                              |
+| HU-010  | `DELETE /api/reservations/release-seats`                        | JWT                              |
+| HU-010  | `GET /api/reservations/summary?functionId=`                     | JWT                              |
+| Soporte | `POST /api/user`, `GET /api/user`                               | JWT, rol `ADMIN`                 |
+| Soporte | `GET`, `PATCH`, `DELETE /api/user/:id`                          | JWT, el propio usuario o `ADMIN` |
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+El CRUD `/api/user` no lo pide ninguna historia: se mantiene solo como soporte interno.
 
-## License
+## Autenticación
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+- Access token de **15 min** y refresh token de **7 días**, firmados con secretos distintos.
+- **Una sesión viva por usuario** (RN-030): cada login revoca las anteriores. El refresh token se guarda como hash SHA-256 en la tabla `Sessions`; reutilizar uno revocado cierra todas las sesiones.
+- Cookies httpOnly: `accessToken` (path `/`) y `refresh_token` (path `/api/auth`). Los clientes sin cookies pueden mandar el refresh token en el cuerpo.
+- Bloqueo de 15 minutos tras 5 intentos fallidos (`MAX_FAILED_ATTEMPTS`). Solo entran cuentas activas.
+- Recuperación de contraseña: `forgot-password` responde siempre igual y `reset-password` consume un token de un solo uso (`RESET_TOKEN_EXPIRES_IN`).
+- Los accesos se auditan en `AccessAudits` (IP y dispositivo).
+
+## Correo y tareas programadas
+
+- **Correo emulado:** sin `SMTP_HOST` no se envía nada; el mensaje se registra en el log. Fuera de producción el log (y la respuesta del registro) incluyen el token de activación para poder probar sin SMTP.
+- **Aviso de estreno:** cada hora, `ReleaseNotificationJob` envía el correo a quienes lo pidieron cuando la película pasa a En Cartelera.
+- **Sillas:** cada minuto, `SeatLockExpiryJob` libera los bloqueos vencidos y los audita.
+
+## Arquitectura
+
+Patrón **Controller → Service → DAO → TypeORM**:
+
+- Controller: HTTP, cookies y lectura de la petición; sin lógica de negocio.
+- Service: reglas de negocio; lanza las excepciones HTTP de Nest.
+- DAO: acceso a datos de su propia entidad.
+
+```
+src/
+├── main.ts, app.module.ts, database.ts
+├── config/        # load-env (exige .env), ConfigService, CORS, Swagger
+├── common/        # decorators (@Public, @Roles, ApiAuth), enums, filtro de errores, guard global, utilidades
+├── seeders/       # npm run seed
+└── modules/       # auth, user, country, cinema, movie, notification, membership,
+                   # profile, showtime, reservation, health
+```
+
+El **guard global** protege todo por defecto: una ruta pública necesita `@Public()` y `@Roles(...)` restringe por rol.
+
+## Tests y calidad
+
+```bash
+npm run test    # 49 archivos, 530 tests (dobles con vi.fn(), sin base de datos)
+npm run lint
+npm run build
+```
+
+## Documentación del proyecto
+
+- `agent.md`: reglas para agentes de IA y personas (arquitectura, convenciones, seguridad).
+- `memory.md`: estado por historia, decisiones, pendientes, bugs y registro de cambios (las entradas antiguas están en `memory-archive.md`).
+- `docs/historias-de-usuario.md`: backlog oficial HU-001 a HU-010 (transcripción del PDF `docs/Historia de usuario NodeJS Multicine Riwi (1).pdf`).
+- `.claude/`: flujo `/hu` con subagentes (analista, implementador y revisor) y la skill `nestjs-best-practices`.
+
+## Pendientes principales
+
+- Migraciones de TypeORM al arrancar y quitar `synchronize` (HU-001).
+- Prueba manual de todas las historias contra PostgreSQL.
+- Políticas de sillas preferenciales (RN-042, HU-010).
+- Los correos distinguen mayúsculas (`Ana@x.com` ≠ `ana@x.com`).
+- Rate limiting en `forgot-password` (propuesta; ninguna historia lo exige).

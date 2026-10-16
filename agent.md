@@ -131,7 +131,8 @@ Si una tarea cae aquí, **no la hagas**: anótala en "Fuera de alcance" de `memo
 | Pieza | Versión / herramienta |
 |---|---|
 | Runtime | Node 22, **CommonJS** (`"type": "commonjs"`), TS `module: commonjs` |
-| Framework | NestJS (`@nestjs/core`, `platform-express`, `swagger`, `typeorm`, `observe`) |
+| Framework | NestJS (`@nestjs/core`, `platform-express`, `swagger`, `typeorm`, `schedule`, `observe`) |
+| Correo | `nodemailer` (emulado sin `SMTP_HOST`) |
 | BD | PostgreSQL vía TypeORM (`pg`) |
 | Validación | `class-validator` + `class-transformer` (ValidationPipe global) |
 | Auth | `jsonwebtoken` (access + refresh), `bcryptjs`, cookies httpOnly (`cookie-parser`) |
@@ -143,15 +144,16 @@ Si una tarea cae aquí, **no la hagas**: anótala en "Fuera de alcance" de `memo
 ```bash
 npm install
 npm run start:dev      # desarrollo con watch
-npm run build          # tsc -p tsconfig.build.json -> dist/
+npm run build          # nest build -p tsconfig.build.json -> dist/ (el plugin de Swagger solo corre con nest build)
 npm run test           # vitest run  (**/*.spec.ts)
 npm run test:cov       # cobertura
 npm run lint           # oxlint src/ test/
 npm run format         # prettier
+npm run seed           # datos de demostración (requiere build previo)
 docker compose up --build
 ```
 
-- Prefijo global: `/api`. Swagger: `/api/docs`.
+- Prefijo global: `/api`. Swagger: `/api/docs` (generado con decoradores `@Api*` y el plugin de `nest-cli.json`; ver abajo).
 - **El `.env` es obligatorio** (`src/config/load-env.ts`): sin él la app no arranca. Copia `.env.example` a `.env`. En Docker se monta como volumen. Nunca subas `.env`.
 
 ---
@@ -172,11 +174,21 @@ src/
 │   └── utils/              # UtilsModule @Global: Jwt, Bcrypt, Captcha, TokenExpiry, Logger, Password
 └── modules/
     ├── auth/               # HU-006, HU-007
-    ├── user/               # soporte de HU-006/HU-002 (CRUD interno, no se amplía)
-    └── country/            # HU-002 (a medias)
+    ├── user/               # soporte de HU-006/HU-002 (CRUD interno, no se amplía) y POST /users/location
+    ├── country/            # HU-002: países, departamentos y ciudades (+ LocationController)
+    ├── cinema/             # HU-002: cines (solo DAO)
+    ├── health/             # HU-001
+    ├── movie/              # HU-003, HU-004, HU-005 (próximos estrenos)
+    ├── notification/       # HU-005: solicitud de aviso y ReleaseNotificationJob
+    ├── membership/         # HU-006, HU-008
+    ├── profile/            # HU-008
+    ├── showtime/           # HU-009: funciones y precios
+    └── reservation/        # HU-010: sillas, bloqueos, auditoría y SeatLockExpiryJob
 ```
 
-Módulos nuevos esperados: `health` (HU-001), `location` o ampliar `country` (HU-002), `movie` (HU-003/004/005), `notification` (HU-005), `profile` y `membership` (HU-008), `showtime` (HU-009), `seat`/`reservation` (HU-010).
+### Swagger (HU-001 RN-003)
+
+Cada controller lleva `@ApiTags`, `@ApiOperation` (en español, con la HU/RN) y respuestas con los códigos reales del service. Las rutas protegidas añaden `@ApiAuth()` (`common/decorators/api-auth.decorator.ts`: Bearer, cookie `accessToken` y 401). El plugin de `nest-cli.json` infiere las propiedades de los DTO; no hace falta `@ApiProperty` salvo que no lo infiera.
 
 ### Patrón por módulo
 
@@ -251,10 +263,10 @@ El original montaba cada ruta con prefijo `/api`, `/api/v1` y sin prefijo. **Nes
 
 | Historia | Original | NestJS hoy |
 |---|---|---|
-| HU-001 | `GET /api/v1/health` | **No existe** |
+| HU-001 | `GET /api/v1/health` | `GET /api/v1/health` (público, 200 incluso con la BD caída) implementado |
 | HU-002 | `GET /countries`, `/departments/:countryId`, `/cities/:departmentId` | `GET /api/countries`, `/api/departments/:countryId`, `/api/cities/:departmentId` (implementadas) |
 | HU-002 | `POST`/`PUT /users/location` | `POST /api/users/location` (JWT) implementado; `PUT` no (fuera de alcance) |
-| HU-003/004/005 | `/api/movies/...` | **Parcial:** HU-003 completa: `GET /api/movies`, `/weekly`, `/filter` y `/today` con filtros (`cityId`, `cinemaId`, `genre`, `classification`, `language`, `roomType`, `format`, `date`, `available`); HU-004 completa: `GET /api/movies/:id`, `/:id/functions`, `/:id/recommendations` (`?cityId=` opcional); HU-005 completa salvo prueba manual: `GET /api/movies/upcoming`, `/upcoming/:id` |
+| HU-003/004/005 | `/api/movies/...` | **Completas salvo prueba manual:** HU-003: `GET /api/movies`, `/weekly`, `/filter` y `/today` con filtros (`cityId`, `cinemaId`, `genre`, `classification`, `language`, `roomType`, `format`, `date`, `available`); HU-004: `GET /api/movies/:id`, `/:id/functions`, `/:id/recommendations` (`?cityId=` opcional); HU-005: `GET /api/movies/upcoming`, `/upcoming/:id` |
 | HU-005 | `POST /api/notifications/upcoming` | `POST /api/notifications/upcoming` (JWT, 201) implementado; el correo automático (RN-020) lo envía `ReleaseNotificationJob` cada hora (emulado sin `SMTP_HOST`) |
 | HU-006 | `GET /api/auth/captcha`, `POST /api/auth/register` | ✅ |
 | HU-006 | `POST /api/auth/verify-email` (+ `GET`, y alias `/activate`) | `POST /api/auth/verify-email` y alias `POST /api/auth/activate` (implementados) |

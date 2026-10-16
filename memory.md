@@ -182,6 +182,13 @@ No se implementa (no pertenece a HU-001 a HU-010):
 
 ## Registro de cambios
 
+### 2026-10-16 — docs(HU-001): README nuevo en español y `agent.md` al día (paso 3 de 4)
+- **Archivos:** `README.md`, `agent.md` (§2 comandos, §3 estructura y sección Swagger, §5.1 filas HU-001 y HU-003/004/005), `memory.md`.
+- **Qué:** el README de plantilla de Nest se sustituye por uno en español: qué es el proyecto, estado por historia, stack, variables de entorno por grupo (sin valores), puesta en marcha con Docker y en local, scripts, Swagger y health, tabla de endpoints por historia, autenticación, correo emulado y tareas programadas, arquitectura, tests, documentación del proyecto y pendientes. `agent.md` corrige el desfase: `build` con `nest build`, `seed`, `schedule`/`nodemailer` en el stack, los módulos que faltaban en §3 y la tabla §5.1 (health existe; HU-003/004/005 completas salvo prueba manual).
+- **Por qué:** HU-001 (documentación del proyecto) y mantener `agent.md` veraz.
+- **Impacto:** ninguno en código ni en contrato.
+- **Verificación:** `npm run test` ✅ (530/530) · `npm run lint` ✅ · `npm run build` ✅. Rutas, scripts, variables y expresiones cron contrastados con los controllers, `package.json`, `.env.example` y los jobs.
+- **Pendiente derivado:** paso 4 (archivar el registro).
 ### 2026-10-16 — docs(HU-001): Swagger documentado en todos los controllers (paso 2 de 4, bug #12)
 - **Archivos:** `src/config/swagger.ts`, `src/common/decorators/api-auth.decorator.ts` (+ spec), los 13 controllers (`app`, `auth`, `country/location`, `health`, `membership`, `movie`, `notification`, `profile`, `reservation` x2, `showtime/functions`, `user` x2), `src/modules/user/update-user.dto.ts`, `memory.md`.
 - **Qué:** descripción real de la API (rutas bajo `/api`, auth por Bearer o cookie `accessToken`, correo emulado, forma de los errores); se quita el `addApiKey` inexistente; tags por módulo con historia (`health`, `ubicación`, `películas`, `notificaciones`, `auth`, `membresía`, `perfil`, `funciones`, `reservas`, `usuarios`, `app`); `addBearerAuth()` + `addCookieAuth('accessToken')`; se elimina el log del puerto fijo (`main.ts` ya imprime la URL). Cada ruta lleva `@ApiOperation` (con HU/RN) y respuestas con los códigos reales leídos de los services y del guard. `@ApiAuth()` (nuevo, usado en 8 controllers/métodos) agrupa Bearer, cookie y 401. Login, refresh y logout documentan las cookies `accessToken` y `refresh_token`. `@ApiBody` en refresh/logout (el tipo unión no lo infiere el plugin) y `@ApiQuery` en `summary`. `UpdateUserDto` importa `PartialType`/`OmitType` de `@nestjs/swagger` (misma API que `@nestjs/mapped-types`, validación intacta) para que su esquema salga con propiedades.
