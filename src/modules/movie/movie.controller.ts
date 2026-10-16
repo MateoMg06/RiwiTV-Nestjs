@@ -8,15 +8,15 @@ export class MovieController {
   constructor(private readonly movieService: MovieService) {}
 
   // Las rutas con `:id` (HU-004) deben declararse después de las rutas fijas.
-  @Get(['', 'weekly'])
+  @Get(['', 'weekly', 'filter'])
   @Public()
   getWeekly(@Query() query: CatalogQueryDto) {
-    return this.movieService.getWeekly(query.cityId);
+    return this.movieService.getWeekly(query);
   }
 
   @Get('today')
   @Public()
   getToday(@Query() query: CatalogQueryDto) {
-    return this.movieService.getToday(query.cityId);
+    return this.movieService.getToday(query);
   }
 }

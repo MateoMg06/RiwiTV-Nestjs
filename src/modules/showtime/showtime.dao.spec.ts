@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import type { DataSource } from 'typeorm';
 import { ShowtimeDao } from './showtime.dao.js';
 import { Showtime } from './showtime.entity.js';
-import { MovieStatus, ShowtimeStatus } from '../../common/enums/domain.enums.js';
+import { AgeRating, MovieStatus, ShowFormat, ShowtimeStatus } from '../../common/enums/domain.enums.js';
 
 function setup(result: unknown[] = []) {
   const qb = {
@@ -80,5 +80,46 @@ describe('ShowtimeDao.findCatalogRange (HU-003)', () => {
 
     expect(qb.orderBy).toHaveBeenCalledWith('movie.name', 'ASC');
     expect(qb.addOrderBy).toHaveBeenCalledWith('showtime.startsAt', 'ASC');
+  });
+
+  it.each([
+    ['cinemaId', 4, 'cinema.id = :cinemaId'],
+    ['genre', 'Drama', 'movie.genre = :genre'],
+    ['classification', AgeRating.DIECISEIS, 'movie.classification = :classification'],
+    ['language', 'Inglés', 'showtime.language = :language'],
+    ['format', ShowFormat.IMAX, 'showtime.format = :format'],
+    ['roomType', 'VIP', 'showtime.roomType = :roomType'],
+  ])('filtra por %s con igualdad exacta', async (key, value, clause) => {
+    const { qb, dao } = setup();
+
+    await dao.findCatalogRange({ from, to, [key]: value });
+
+    expect(qb.andWhere).toHaveBeenCalledWith(clause, { [key]: value });
+    expect(qb.andWhere).toHaveBeenCalledTimes(4);
+  });
+
+  it('available: true excluye SOLD_OUT y conserva CANCELLED', async () => {
+    const { qb, dao } = setup();
+
+    await dao.findCatalogRange({ from, to, available: true });
+
+    expect(qb.andWhere).toHaveBeenCalledWith('showtime.status <> :soldOut', {
+      soldOut: ShowtimeStatus.SOLD_OUT,
+    });
+    expect(qb.andWhere).toHaveBeenCalledWith('showtime.status <> :cancelled', {
+      cancelled: ShowtimeStatus.CANCELLED,
+    });
+  });
+
+  it.each([[false], [undefined]])('available: %s no filtra SOLD_OUT', async (available) => {
+    const { qb, dao } = setup();
+
+    await dao.findCatalogRange({ from, to, available });
+
+    expect(qb.andWhere).toHaveBeenCalledTimes(3);
+    expect(qb.andWhere).not.toHaveBeenCalledWith(
+      'showtime.status <> :soldOut',
+      expect.anything(),
+    );
   });
 });

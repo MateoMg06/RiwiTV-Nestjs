@@ -38,9 +38,9 @@ async function findOrCreate<T extends ObjectLiteral>(
 }
 
 /** Medianoche de hoy (zona `TZ`) + `days` días, a la hora `hour`. */
-function dayAt(days: number, hour: number): Date {
+function dayAt(days: number, hour: number, minutes = 0): Date {
   const date = new Date();
-  date.setHours(hour, 0, 0, 0);
+  date.setHours(hour, minutes, 0, 0);
   date.setDate(date.getDate() + days);
   return date;
 }
@@ -288,6 +288,35 @@ async function seed(): Promise<void> {
         audioType: AudioType.SUBTITLED,
         status: ShowtimeStatus.ACTIVE,
       },
+      // Para probar filtros (idioma, tipo de sala, "Disponible", cine y fecha).
+      {
+        movie: noche,
+        cinema: centro,
+        startsAt: dayAt(0, 23, 30),
+        format: ShowFormat.DOS_D,
+        audioType: AudioType.SUBTITLED,
+        status: ShowtimeStatus.ACTIVE,
+        language: 'Inglés',
+        roomType: 'STANDARD',
+      },
+      {
+        movie: galactica,
+        cinema: centro,
+        startsAt: dayAt(1, 22),
+        format: ShowFormat.IMAX,
+        audioType: AudioType.DUBBED,
+        status: ShowtimeStatus.SOLD_OUT,
+        roomType: 'VIP',
+      },
+      {
+        movie: noche,
+        cinema: sur,
+        startsAt: dayAt(3, 17),
+        format: ShowFormat.TRES_D,
+        audioType: AudioType.DUBBED,
+        status: ShowtimeStatus.ACTIVE,
+        roomType: 'STANDARD',
+      },
     ];
     for (const data of showtimeData) {
       await findOrCreate(
@@ -298,7 +327,7 @@ async function seed(): Promise<void> {
           cinema: { id: data.cinema.id },
           startsAt: data.startsAt,
         },
-        { ...data, language: 'Español' },
+        { ...data, language: data.language ?? 'Español', roomType: data.roomType ?? 'STANDARD' },
       );
     }
   } finally {

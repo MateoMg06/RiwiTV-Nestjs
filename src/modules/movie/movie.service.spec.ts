@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { BadRequestException } from '@nestjs/common';
 import { MovieService } from './movie.service.js';
 import type { ShowtimeDao } from '../showtime/showtime.dao.js';
 import type { Showtime } from '../showtime/showtime.entity.js';
@@ -37,6 +38,7 @@ const showtime = (
     startsAt: new Date(`2026-10-1${id}T20:00:00Z`),
     format,
     language: 'Español',
+    roomType: 'STANDARD',
     audioType: AudioType.DUBBED,
     status: ShowtimeStatus.ACTIVE,
   }) as unknown as Showtime;
@@ -64,7 +66,7 @@ describe('MovieService.getWeekly (HU-003)', () => {
   });
 
   it('pasa cityId al DAO', async () => {
-    await service.getWeekly(5);
+    await service.getWeekly({ cityId: 5 });
 
     expect(dao.findCatalogRange).toHaveBeenCalledWith(expect.objectContaining({ cityId: 5 }));
   });
@@ -99,6 +101,7 @@ describe('MovieService.getWeekly (HU-003)', () => {
       startsAt: new Date('2026-10-12T20:00:00Z'),
       format: ShowFormat.IMAX,
       language: 'Español',
+      roomType: 'STANDARD',
       audioType: AudioType.DUBBED,
       status: ShowtimeStatus.ACTIVE,
       cinema: { id: 11, name: 'Sur' },
@@ -150,7 +153,7 @@ describe('MovieService.getToday (HU-003)', () => {
   });
 
   it('pasa cityId al DAO', async () => {
-    await service.getToday(5);
+    await service.getToday({ cityId: 5 });
 
     expect(dao.findCatalogRange).toHaveBeenCalledWith(expect.objectContaining({ cityId: 5 }));
   });
@@ -172,5 +175,97 @@ describe('MovieService.getToday (HU-003)', () => {
     expect(result[0].formats).toEqual([ShowFormat.DOS_D]);
     expect(result[0].showtimes).toHaveLength(2);
     expect(result[0].audienceRating).toBe(4.5);
+  });
+});
+
+describe('MovieService filtros (HU-003 pasos 3-5)', () => {
+  let dao: { findCatalogRange: ReturnType<typeof vi.fn> };
+  let service: MovieService;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 9, 15, 14, 30, 0));
+    dao = { findCatalogRange: vi.fn().mockResolvedValue([]) };
+    service = new MovieService(dao as unknown as ShowtimeDao);
+  });
+
+  afterEach(() => vi.useRealTimers());
+
+  it('pasa los filtros al DAO sin date y conserva el rango semanal', async () => {
+    const filters = {
+      cityId: 1,
+      cinemaId: 2,
+      genre: 'Drama',
+      language: 'Inglés',
+      roomType: 'VIP',
+      classification: AgeRating.DIECISEIS,
+      format: ShowFormat.IMAX,
+      available: true,
+    };
+
+    await service.getWeekly({ ...filters, date: undefined });
+
+    const arg = dao.findCatalogRange.mock.calls[0][0];
+    expect(arg).toMatchObject(filters);
+    expect('date' in arg).toBe(false);
+    expect(arg.from).toEqual(new Date(2026, 9, 15, 14, 30, 0));
+    expect(arg.to).toEqual(new Date(2026, 9, 21, 23, 59, 59, 999));
+  });
+
+  it('date futuro: de 00:00 a 23:59:59.999 de ese día', async () => {
+    await service.getWeekly({ date: '2026-10-18' });
+
+    const { from, to } = dao.findCatalogRange.mock.calls[0][0];
+    expect(from).toEqual(new Date(2026, 9, 18, 0, 0, 0, 0));
+    expect(to).toEqual(new Date(2026, 9, 18, 23, 59, 59, 999));
+  });
+
+  it('date fuera de la ventana de 7 días también se consulta', async () => {
+    await service.getWeekly({ date: '2026-12-25' });
+
+    expect(dao.findCatalogRange).toHaveBeenCalledTimes(1);
+  });
+
+  it('date = hoy: from es ahora', async () => {
+    await service.getWeekly({ date: '2026-10-15' });
+
+    const { from, to } = dao.findCatalogRange.mock.calls[0][0];
+    expect(from).toEqual(new Date(2026, 9, 15, 14, 30, 0));
+    expect(to).toEqual(new Date(2026, 9, 15, 23, 59, 59, 999));
+  });
+
+  it('date pasado: [] sin consultar el DAO', async () => {
+    await expect(service.getWeekly({ date: '2026-10-14' })).resolves.toEqual([]);
+    expect(dao.findCatalogRange).not.toHaveBeenCalled();
+  });
+
+  it.each(['2026-02-30', '2026-13-01'])('date %s inexistente: BadRequest', async (date) => {
+    await expect(service.getWeekly({ date })).rejects.toBeInstanceOf(BadRequestException);
+    expect(dao.findCatalogRange).not.toHaveBeenCalled();
+  });
+
+  it('getToday acepta date y filtros', async () => {
+    await service.getToday({ date: '2026-10-17', available: true });
+
+    const arg = dao.findCatalogRange.mock.calls[0][0];
+    expect(arg.from).toEqual(new Date(2026, 9, 17, 0, 0, 0, 0));
+    expect(arg.to).toEqual(new Date(2026, 9, 17, 23, 59, 59, 999));
+    expect(arg.available).toBe(true);
+  });
+
+  it('getToday con date pasado devuelve []', async () => {
+    await expect(service.getToday({ date: '2026-10-01' })).resolves.toEqual([]);
+    expect(dao.findCatalogRange).not.toHaveBeenCalled();
+  });
+
+  it('incluye roomType en cada función y formats solo de las devueltas', async () => {
+    const vip = showtime(2, movieA, ShowFormat.VIP);
+    (vip as unknown as { roomType: string }).roomType = 'VIP';
+    dao.findCatalogRange.mockResolvedValue([vip]);
+
+    const [movie] = await service.getWeekly({ roomType: 'VIP' });
+
+    expect(movie.showtimes[0].roomType).toBe('VIP');
+    expect(movie.formats).toEqual([ShowFormat.VIP]);
   });
 });

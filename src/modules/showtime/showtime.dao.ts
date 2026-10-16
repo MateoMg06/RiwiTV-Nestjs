@@ -1,12 +1,24 @@
 import { Injectable } from '@nestjs/common';
 import { DataSource, Repository } from 'typeorm';
-import { MovieStatus, ShowtimeStatus } from '../../common/enums/domain.enums.js';
+import {
+  AgeRating,
+  MovieStatus,
+  ShowFormat,
+  ShowtimeStatus,
+} from '../../common/enums/domain.enums.js';
 import { Showtime } from './showtime.entity.js';
 
 export interface CatalogRange {
   from: Date;
   to: Date;
   cityId?: number;
+  cinemaId?: number;
+  genre?: string;
+  classification?: AgeRating;
+  language?: string;
+  format?: ShowFormat;
+  roomType?: string;
+  available?: boolean;
 }
 
 @Injectable()
@@ -18,7 +30,18 @@ export class ShowtimeDao {
   }
 
   /** Funciones no canceladas de películas activas en cines activos, en una sola consulta. */
-  findCatalogRange({ from, to, cityId }: CatalogRange): Promise<Showtime[]> {
+  findCatalogRange({
+    from,
+    to,
+    cityId,
+    cinemaId,
+    genre,
+    classification,
+    language,
+    format,
+    roomType,
+    available,
+  }: CatalogRange): Promise<Showtime[]> {
     const query = this.repo
       .createQueryBuilder('showtime')
       .innerJoinAndSelect('showtime.movie', 'movie')
@@ -30,6 +53,17 @@ export class ShowtimeDao {
 
     if (cityId !== undefined) {
       query.andWhere('cinema.city = :cityId', { cityId });
+    }
+    if (cinemaId !== undefined) query.andWhere('cinema.id = :cinemaId', { cinemaId });
+    if (genre !== undefined) query.andWhere('movie.genre = :genre', { genre });
+    if (classification !== undefined) {
+      query.andWhere('movie.classification = :classification', { classification });
+    }
+    if (language !== undefined) query.andWhere('showtime.language = :language', { language });
+    if (format !== undefined) query.andWhere('showtime.format = :format', { format });
+    if (roomType !== undefined) query.andWhere('showtime.roomType = :roomType', { roomType });
+    if (available === true) {
+      query.andWhere('showtime.status <> :soldOut', { soldOut: ShowtimeStatus.SOLD_OUT });
     }
 
     return query.orderBy('movie.name', 'ASC').addOrderBy('showtime.startsAt', 'ASC').getMany();

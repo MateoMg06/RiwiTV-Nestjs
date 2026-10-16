@@ -10,7 +10,7 @@
 |---|---|---|---|
 | HU-001 | Parcial | Capas, `.env` obligatorio, Docker Compose, Swagger, logger, Vitest, oxlint, Prettier, Helmet, CORS, `GET /api/v1/health` | Migraciones automáticas al arrancar (hoy `synchronize: true`), ambientes Dev/QA/Prod |
 | HU-002 | Completa salvo prueba manual | Entidades; `GET /countries`, `/departments/:countryId`, `/cities/:departmentId` (públicas, ciudades solo activas); `POST /users/location` (JWT) con RN-006; entidad `Cinema` mínima; `npm run seed` | Prueba manual contra Postgres (seed + `POST /api/users/location`) |
-| HU-003 | Parcial (paso 2 de 5) | Entidades `Movie` y `Showtime` (columnas de cartelera); `GET /movies`, `/movies/weekly` y `/movies/today` (públicos, `cityId` opcional, 7 días, RN-012); seed con películas y funciones | Pasos 3–5: filtros (fecha, género, clasificación, idioma, tipo de sala, formato, complejo, "Disponible" RN-011), tipo de sala, prueba manual |
+| HU-003 | Completa salvo prueba manual | Entidades `Movie` y `Showtime` (con `roomType`); `GET /movies`, `/movies/weekly`, `/movies/filter` y `/movies/today` (públicos; filtros `cityId`, `cinemaId`, `genre`, `classification`, `language`, `roomType`, `format`, `date`, `available`; 7 días, RN-011/012); seed con películas y funciones | Prueba manual contra Postgres |
 | HU-004 | No iniciada | — | Detalle completo (incluye precio por formato y calificación promedio), funciones futuras de la ciudad, recomendaciones |
 | HU-005 | No iniciada | — | Próximos estrenos ordenados por fecha, contador regresivo, `ReleaseNotification` sin duplicados (RN-019), correo al pasar a "En Cartelera" (RN-020) |
 | HU-006 | Parcial | Captcha, registro, BCrypt, validador de contraseña (≥10 + complejidad), activación por token 24 h | Crear perfil, membresía **Activa** con código único, historial vacío, billetera vacía y preferencias; correo de activación (SMTP); `POST /auth/verify-email`; `POST /membership/create`; DTO con mínimo 10 |
@@ -55,6 +55,11 @@
 - HU-003: «hoy» = de ahora al fin del día (23:59:59.999 en `TZ`). Desviación consciente del original, que usa el inicio del día y muestra funciones ya iniciadas. Decisión de la persona.
 - HU-003: las rutas fijas de `/movies` (`weekly`, luego `today`, `filter`) deben declararse antes de `:id` (HU-004).
 - HU-003: seed ampliado: Itagüí (activa) con «Multicine Riwi Sur», «Multicine Riwi Cerrado» (inactivo) en Medellín, 6 películas (4 `ACTIVE`, 1 `UPCOMING`, 1 `INACTIVE`) y 13 funciones relativas a hoy (incluidas: hoy 23:00, +1, +3, +6, una `SOLD_OUT`, 2 en Itagüí; excluidas: +7, ayer, `CANCELLED`, película próxima, película inactiva, cine inactivo).
+- HU-003: «Disponible» (RN-011) = `status <> SOLD_OUT` (`available=true`); no se añade `availableSeats`. `available=false` o ausente no filtra. Decisión de la persona.
+- HU-003: `GET /movies/today` también acepta `date` (como el original). Decisión de la persona.
+- HU-003: `date` (YYYY-MM-DD) puede estar fuera de la ventana de 7 días; muestra ese día completo, pero sin funciones ya iniciadas (`from` = max(inicio del día, ahora)); día pasado → `[]`; fecha inexistente (`2026-02-30`) → 400. Decisión de la persona.
+- HU-003: `roomType` es string libre (`varchar(30)`, default `'STANDARD'`), sin enum ni tabla. Filtros por igualdad exacta (sensible a mayúsculas). `classification=12+` se envía como `12%2B`. Decisión de la persona.
+- HU-003: seed con 3 funciones más (16 en total): Centro hoy 23:30 en inglés, Centro +1 22:00 IMAX `SOLD_OUT` en sala `VIP`, Sur +3 17:00 3D.
 
 ## Pendientes
 
@@ -71,8 +76,8 @@ Por historia:
 - [ ] HU-002: prueba manual contra Postgres (seed + login + `POST /api/users/location`: 200, 404, 422 inactiva, 422 sin cines).
 - [x] HU-003 paso 1: entidades `Movie`/`Showtime`, `GET /movies` y `/movies/weekly`, seed.
 - [x] HU-003 paso 2: `GET /movies/today`.
-- [ ] HU-003 pasos 3–5: filtros (fecha, género, clasificación, idioma, tipo de sala, formato, complejo) y "Disponible" (RN-011, quita `SOLD_OUT`); tipo de sala necesita columna en `Showtime`.
-- [ ] HU-003: prueba manual contra Postgres (seed + `GET /api/movies/weekly?cityId=`); añadir `TZ=America/Bogota` al `.env` local (ya está en `.env.example`).
+- [x] HU-003 pasos 3–5: filtros y "Disponible"; columna `roomType` en `Showtime`.
+- [ ] HU-003: prueba manual contra Postgres (seed + `GET /api/movies/weekly?cityId=`); añadir `TZ=America/Bogota` al `.env` local (ya está en `.env.example`). Consultas de los filtros (la columna `roomType` la crea `synchronize`; en BD con funciones previas toma `STANDARD`): `?format=IMAX`, `?format=IMAX&available=true`, `?roomType=VIP`, `?language=Inglés`, `?cinemaId=<Sur>`, `?genre=Drama`, `?classification=16%2B`, `?date=<hoy+3>`, `?date=<ayer>` (→ `[]`), `?date=2026-13-01` (→ 400), `/today?available=true`.
 - [ ] HU-004: detalle completo con precio por formato; funciones futuras de la ciudad; recomendaciones.
 - [ ] HU-005: próximos estrenos; `POST /notifications/upcoming` sin duplicados; correo al pasar a "En Cartelera".
 - [ ] HU-006: `register` crea `Profile`, `Membership` **Activa** con código único, historial vacío, billetera vacía y preferencias; correo de activación (nodemailer); `POST /auth/verify-email`; `POST /membership/create`; `CreateUserDto` con mínimo 10 caracteres.
@@ -253,3 +258,11 @@ No se implementa (no pertenece a HU-001 a HU-010):
 - **Impacto:** ninguno en código.
 - **Verificación:** no aplica (solo documentación).
 - **Pendiente derivado:** resolver los bugs listados, uno por cambio.
+
+### 2026-10-15 — feat(HU-003): filtros de la cartelera (pasos 3, 4 y 5 de 5)
+- **Archivos:** `src/modules/movie/{catalog-query.dto,movie.service,movie.controller}.ts` y specs (nuevo `catalog-query.dto.spec.ts`), `src/modules/showtime/{showtime.entity,showtime.dao}.ts` y `showtime.dao.spec.ts`, `src/seeders/seed.ts`, `agent.md` (§5.1 fila HU-003/004/005), `memory.md`.
+- **Qué:** `GET /api/movies`, `/weekly`, `/filter` y `/today` aceptan `cityId`, `cinemaId`, `genre`, `classification`, `language`, `roomType`, `format`, `date` y `available`. Nueva columna `Showtime.roomType`; cada función de la respuesta incluye `roomType`. `getWeekly`/`getToday` reciben el DTO; `resolveRange` calcula el rango (con `date`, sin funciones pasadas); el DAO añade un `andWhere` por filtro presente. Seed con 3 funciones nuevas.
+- **Por qué:** HU-003 (filtros, RN-011 «Disponible»).
+- **Impacto:** columna nueva en `Showtimes` (`synchronize` la crea; sin migración); sin variables de entorno nuevas. `available` usa `@Transform` sobre el valor crudo porque `enableImplicitConversion` convertiría `'false'` en `true` (cubierto por test).
+- **Verificación:** `npm run test` ✅ (198/198) · `npm run lint` ✅ · `npm run build` ✅. Sin prueba manual (sin Postgres).
+- **Pendiente derivado:** prueba manual de HU-003 con las consultas listadas en Pendientes.

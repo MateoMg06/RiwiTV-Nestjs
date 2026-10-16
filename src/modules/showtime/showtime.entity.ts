@@ -3,7 +3,7 @@ import { AudioType, ShowFormat, ShowtimeStatus } from '../../common/enums/domain
 import { Movie } from '../movie/movie.entity.js';
 import { Cinema } from '../cinema/cinema.entity.js';
 
-/** Función. Solo las columnas de la cartelera (HU-003); precio y sala llegan con HU-009. */
+/** Función. Solo las columnas de la cartelera (HU-003); precio y sala concreta llegan con HU-009. */
 @Entity('Showtimes')
 export class Showtime {
   @PrimaryGeneratedColumn()
@@ -24,6 +24,10 @@ export class Showtime {
 
   @Column({ type: 'varchar', default: 'Español' })
   language: string;
+
+  // Tipo de sala (`room_type` del original), texto libre.
+  @Column({ type: 'varchar', length: 30, default: 'STANDARD' })
+  roomType: string;
 
   @Column({ type: 'enum', enum: AudioType })
   audioType: AudioType;
