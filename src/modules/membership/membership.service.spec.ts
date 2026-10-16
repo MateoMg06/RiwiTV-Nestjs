@@ -1,8 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
-import { ConflictException, InternalServerErrorException } from '@nestjs/common';
+import { ConflictException, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import type { EntityManager } from 'typeorm';
 import { MembershipService } from './membership.service.js';
-import { MembershipStatus } from '../../common/enums/domain.enums.js';
+import { MembershipLevel, MembershipStatus } from '../../common/enums/domain.enums.js';
 
 function setup(create: ReturnType<typeof vi.fn>, findByUserId = vi.fn()) {
   const dao = { create, findByUserId };
@@ -92,5 +92,47 @@ describe('MembershipService.findByUserId (HU-007)', () => {
 
     await expect(service.findByUserId(7)).resolves.toBe(found);
     expect(dao.findByUserId).toHaveBeenCalledWith(7);
+  });
+});
+
+describe('MembershipService.getMine / getBenefits (HU-008)', () => {
+  const stored = {
+    id: 1,
+    userId: 7,
+    code: 'RTV-0123456789',
+    status: MembershipStatus.ACTIVE,
+    level: MembershipLevel.ORO,
+    createdAt: new Date('2026-01-01'),
+  };
+
+  it('getMine devuelve código, estado, nivel, QR y fecha', async () => {
+    const { dao, service } = setup(vi.fn(), vi.fn().mockResolvedValue(stored));
+
+    await expect(service.getMine(7)).resolves.toEqual({
+      code: 'RTV-0123456789',
+      status: MembershipStatus.ACTIVE,
+      level: MembershipLevel.ORO,
+      qr: { payload: 'RTV-0123456789' },
+      createdAt: stored.createdAt,
+    });
+    expect(dao.findByUserId).toHaveBeenCalledWith(7);
+  });
+
+  it('getBenefits devuelve nivel, descuento, beneficios y bonos vacíos', async () => {
+    const { service } = setup(vi.fn(), vi.fn().mockResolvedValue(stored));
+
+    await expect(service.getBenefits(7)).resolves.toEqual({
+      level: MembershipLevel.ORO,
+      discountPercent: 10,
+      benefits: [{ type: 'DISCOUNT', percent: 10 }],
+      bonuses: [],
+    });
+  });
+
+  it('404 si el usuario no tiene membresía', async () => {
+    const { service } = setup(vi.fn(), vi.fn().mockResolvedValue(null));
+
+    await expect(service.getMine(7)).rejects.toThrow('El usuario no tiene membresía');
+    await expect(service.getBenefits(7)).rejects.toBeInstanceOf(NotFoundException);
   });
 });

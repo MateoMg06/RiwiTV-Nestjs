@@ -1,4 +1,4 @@
-import { Controller, Post, Req, UnauthorizedException } from '@nestjs/common';
+import { Controller, Get, Post, Req, UnauthorizedException } from '@nestjs/common';
 import type { AuthenticatedRequest } from '../auth/interfaces/authenticated-request.interface.js';
 import { MembershipService } from './membership.service.js';
 import { MembershipStatus } from '../../common/enums/domain.enums.js';
@@ -10,15 +10,29 @@ import { MembershipStatus } from '../../common/enums/domain.enums.js';
 export class MembershipController {
   constructor(private readonly membershipService: MembershipService) {}
 
-  @Post('create')
-  async create(
-    @Req() request: AuthenticatedRequest,
-  ): Promise<{ code: string; status: MembershipStatus }> {
+  private userIdOf(request: AuthenticatedRequest): number {
     const userId = request.user?.id;
     if (userId === undefined) {
       throw new UnauthorizedException('Usuario no autenticado');
     }
-    const { code, status } = await this.membershipService.create(userId);
+    return userId;
+  }
+
+  @Get()
+  getMine(@Req() request: AuthenticatedRequest) {
+    return this.membershipService.getMine(this.userIdOf(request));
+  }
+
+  @Get('benefits')
+  getBenefits(@Req() request: AuthenticatedRequest) {
+    return this.membershipService.getBenefits(this.userIdOf(request));
+  }
+
+  @Post('create')
+  async create(
+    @Req() request: AuthenticatedRequest,
+  ): Promise<{ code: string; status: MembershipStatus }> {
+    const { code, status } = await this.membershipService.create(this.userIdOf(request));
     return { code, status };
   }
 }

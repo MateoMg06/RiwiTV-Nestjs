@@ -159,6 +159,14 @@ No se implementa (no pertenece a HU-001 a HU-010):
 
 ## Registro de cambios
 
+### 2026-10-16 — feat(HU-008): `GET /membership` y `GET /membership/benefits` (paso 2 de 6)
+- **Archivos:** `src/modules/membership/membership.{controller,service}.ts` (+specs), `memory.md`.
+- **Qué:** `GET /membership` (JWT) → `{ code, status, level, qr: { payload: code }, createdAt }`; `GET /membership/benefits` (JWT) → `{ level, discountPercent, benefits, bonuses: [] }`. 404 «El usuario no tiene membresía». La identidad sale de `request.user.id` (401 si falta). El QR es solo el contenido (el código único, RN-033), sin dependencia ni imagen.
+- **Por qué:** HU-008 (QR de membresía, nivel, descuentos por nivel).
+- **Impacto:** dos endpoints nuevos. `bonuses` = `[]` provisional: no existe billetera de bonos (HU-006, decisión de la persona; los bonos reales son de HU-010 / fuera de alcance).
+- **Verificación:** `npm run test` ✅ (373/373) · `npm run lint` ✅ · `npm run build` ✅.
+- **Pendiente derivado:** pasos 3 a 6.
+
 ### 2026-10-16 — feat(HU-008): niveles de membresía y descuentos; se elimina `User.membership` (paso 1 de 6)
 - **Archivos:** `src/common/enums/domain.enums.ts`, `src/modules/user/user.entity.ts`, `src/modules/membership/membership.entity.ts`, `src/modules/membership/membership-benefits.ts` (+spec), `memory.md`.
 - **Qué:** enum `MembershipLevel` (BRONCE, PLATA, ORO, PLATINO); se elimina el enum `Membership` (BASICA/PLATA) y la columna `Users.membership`. `Memberships.level` (enum, default BRONCE). `membership-benefits.ts`: `DISCOUNT_BY_LEVEL` (0/5/10/15, RN-032), `discountFor`, tipo `Benefit` y `benefitsFor(level)` (se usará en `/membership/benefits` y en el login).

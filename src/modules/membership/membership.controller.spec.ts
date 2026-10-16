@@ -10,6 +10,8 @@ import { MembershipStatus } from '../../common/enums/domain.enums.js';
 describe('MembershipController (HU-006)', () => {
   const build = () => {
     const service = {
+      getMine: vi.fn().mockResolvedValue({ code: 'RTV-0123456789' }),
+      getBenefits: vi.fn().mockResolvedValue({ level: 'BRONCE' }),
       create: vi.fn().mockResolvedValue({
         id: 1,
         userId: 7,
@@ -59,5 +61,35 @@ describe('MembershipController (HU-006)', () => {
       UnauthorizedException,
     );
     expect(service.create).not.toHaveBeenCalled();
+  });
+
+  it('expone GET /membership y GET /membership/benefits sin ser públicos', () => {
+    for (const [name, path] of [
+      ['getMine', '/'],
+      ['getBenefits', 'benefits'],
+    ] as const) {
+      const handler = MembershipController.prototype[name];
+      expect(Reflect.getMetadata(PATH_METADATA, handler)).toBe(path);
+      expect(Reflect.getMetadata(METHOD_METADATA, handler)).toBe(RequestMethod.GET);
+      expect(Reflect.getMetadata(IS_PUBLIC_KEY, handler)).toBeUndefined();
+    }
+  });
+
+  it('getMine y getBenefits usan la identidad del token', async () => {
+    const { controller, service } = build();
+    const req = { user: { id: 7 } } as AuthenticatedRequest;
+
+    await expect(controller.getMine(req)).resolves.toEqual({ code: 'RTV-0123456789' });
+    await expect(controller.getBenefits(req)).resolves.toEqual({ level: 'BRONCE' });
+    expect(service.getMine).toHaveBeenCalledWith(7);
+    expect(service.getBenefits).toHaveBeenCalledWith(7);
+  });
+
+  it('getMine y getBenefits dan 401 sin identidad', () => {
+    const { controller, service } = build();
+
+    expect(() => controller.getMine({} as AuthenticatedRequest)).toThrow(UnauthorizedException);
+    expect(() => controller.getBenefits({} as AuthenticatedRequest)).toThrow(UnauthorizedException);
+    expect(service.getMine).not.toHaveBeenCalled();
   });
 });

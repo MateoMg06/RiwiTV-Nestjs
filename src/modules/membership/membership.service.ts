@@ -1,9 +1,15 @@
-import { ConflictException, Injectable, InternalServerErrorException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  InternalServerErrorException,
+  NotFoundException,
+} from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import { EntityManager } from 'typeorm';
 import { MembershipDao } from './membership.dao.js';
 import { Membership } from './membership.entity.js';
-import { MembershipStatus } from '../../common/enums/domain.enums.js';
+import { MembershipLevel, MembershipStatus } from '../../common/enums/domain.enums.js';
+import { type Benefit, benefitsFor, discountFor } from './membership-benefits.js';
 
 /** Intentos para generar un código sin colisión antes de rendirse. */
 const MAX_CODE_ATTEMPTS = 3;
@@ -15,6 +21,40 @@ export class MembershipService {
   /** Membresía del usuario (la usa el login de HU-007). */
   findByUserId(userId: number): Promise<Membership | null> {
     return this.membershipDao.findByUserId(userId);
+  }
+
+  private async getOrFail(userId: number): Promise<Membership> {
+    const membership = await this.membershipDao.findByUserId(userId);
+    if (!membership) throw new NotFoundException('El usuario no tiene membresía');
+    return membership;
+  }
+
+  /** `GET /membership`: el QR es el propio código (el frontend dibuja la imagen). */
+  async getMine(userId: number): Promise<{
+    code: string;
+    status: MembershipStatus;
+    level: MembershipLevel;
+    qr: { payload: string };
+    createdAt: Date;
+  }> {
+    const { code, status, level, createdAt } = await this.getOrFail(userId);
+    return { code, status, level, qr: { payload: code }, createdAt };
+  }
+
+  /** `GET /membership/benefits`. `bonuses` queda vacío: no existe billetera de bonos (HU-006). */
+  async getBenefits(userId: number): Promise<{
+    level: MembershipLevel;
+    discountPercent: number;
+    benefits: Benefit[];
+    bonuses: never[];
+  }> {
+    const { level } = await this.getOrFail(userId);
+    return {
+      level,
+      discountPercent: discountFor(level),
+      benefits: benefitsFor(level),
+      bonuses: [],
+    };
   }
 
   /** `POST /membership/create`: 409 si el usuario ya tiene membresía. */
