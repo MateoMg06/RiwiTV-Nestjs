@@ -1,3 +1,4 @@
+import * as path from 'path';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Country } from './modules/country/country.entity.js';
@@ -25,7 +26,7 @@ import { Session } from './modules/auth/entities/session.entity.js';
         Session,
       ],
       synchronize: true,
-      migrations: [`${import.meta.dirname}/migrations/*{.ts,.js}`],
+      migrations: [`${path.dirname(__filename)}/migrations/*{.ts,.js}`],
     }),
     CountryModule,
     UserModule,

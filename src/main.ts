@@ -1,3 +1,4 @@
+import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import cookieParser from 'cookie-parser';
@@ -35,4 +36,7 @@ async function bootstrap() {
   console.log(`📚 Swagger docs available at http://localhost:${AppModule.appPort}/api/docs`);
 }
 
-await bootstrap();
+bootstrap().catch(err => {
+  console.error(err);
+  process.exit(1);
+});

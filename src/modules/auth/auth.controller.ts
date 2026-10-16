@@ -20,7 +20,7 @@ import type { AuthenticatedRequest } from './interfaces/authenticated-request.in
 import { CaptchaChallenge } from '../../common/utils/captcha.js';
 
 /** Nombres de las cookies de sesion, centralizados para no desincronizarlos. */
-const ACCESS_COOKIE = 'access_token';
+const ACCESS_COOKIE = 'accessToken';
 const REFRESH_COOKIE = 'refresh_token';
 
 @Controller('auth')
