@@ -14,6 +14,7 @@ import { LoginDto } from './dto/login.dto.js';
 import { AuthResponse, AuthUser, LoginResponse } from './interfaces/auth-response.interface.js';
 import { UserService } from '../user/user.service.js';
 import { MembershipService } from '../membership/membership.service.js';
+import { benefitsFor } from '../membership/membership-benefits.js';
 import { UserDao } from '../user/user.dao.js';
 import { RegisterDto } from './dto/register.dto.js';
 import { User } from '../user/user.entity.js';
@@ -260,8 +261,10 @@ export class AuthService {
 
     return {
       ...tokens,
-      membership: membership ? { code: membership.code, status: membership.status } : null,
-      benefits: [],
+      membership: membership
+        ? { code: membership.code, status: membership.status, level: membership.level }
+        : null,
+      benefits: membership ? benefitsFor(membership.level) : [],
     };
   }
 

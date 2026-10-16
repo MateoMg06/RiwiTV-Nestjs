@@ -6,7 +6,7 @@ import { AuthController } from './auth.controller.js';
 import type { AuthService } from './auth.service.js';
 import type { AuthResponse } from './interfaces/auth-response.interface.js';
 import type { AuthenticatedRequest } from './interfaces/authenticated-request.interface.js';
-import { MembershipStatus, UserRole } from '../../common/enums/domain.enums.js';
+import { MembershipLevel, MembershipStatus, UserRole } from '../../common/enums/domain.enums.js';
 
 /**
  * Tests del controller de autenticacion.
@@ -180,8 +180,12 @@ describe('AuthController', () => {
     it('incluye membership y benefits en el cuerpo, sin tocar las cookies', async () => {
       const full = {
         ...tokens,
-        membership: { code: 'RTV-0123456789', status: MembershipStatus.ACTIVE },
-        benefits: [],
+        membership: {
+          code: 'RTV-0123456789',
+          status: MembershipStatus.ACTIVE,
+          level: MembershipLevel.ORO,
+        },
+        benefits: [{ type: 'DISCOUNT' as const, percent: 10 }],
       };
       (authService.login as ReturnType<typeof vi.fn>).mockResolvedValue(full);
 

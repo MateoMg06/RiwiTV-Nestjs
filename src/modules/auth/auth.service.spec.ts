@@ -22,6 +22,7 @@ import { Config } from '../../config/config.keys.js';
 import {
   AccessEvent,
   AccountStatus,
+  MembershipLevel,
   MembershipStatus,
   UserRole,
 } from '../../common/enums/domain.enums.js';
@@ -487,6 +488,7 @@ describe('AuthService', () => {
         userId: 1,
         code: 'RTV-0123456789',
         status: MembershipStatus.ACTIVE,
+        level: MembershipLevel.PLATA,
       });
 
       const result = await service.login({ email: 'ana@example.com', password: 'ok' });
@@ -495,8 +497,9 @@ describe('AuthService', () => {
       expect(result.membership).toEqual({
         code: 'RTV-0123456789',
         status: MembershipStatus.ACTIVE,
+        level: MembershipLevel.PLATA,
       });
-      expect(result.benefits).toEqual([]);
+      expect(result.benefits).toEqual([{ type: 'DISCOUNT', percent: 5 }]);
       expect(result.user.email).toBe('ana@example.com');
       expect(result.accessToken).toEqual(expect.any(String));
       expect(result.refreshToken).toEqual(expect.any(String));

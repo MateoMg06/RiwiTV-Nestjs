@@ -1,4 +1,5 @@
-import { MembershipStatus, UserRole } from '../../../common/enums/domain.enums.js';
+import type { Benefit } from '../../membership/membership-benefits.js';
+import { MembershipLevel, MembershipStatus, UserRole } from '../../../common/enums/domain.enums.js';
 
 /**
  * Respuesta de login / refresh.
@@ -26,9 +27,9 @@ export interface AuthResponse {
 
 /**
  * Respuesta de login (HU-007): ademas de los tokens, la membresía y los beneficios activos.
- * `benefits` es provisional (siempre `[]`) hasta que HU-008 defina los beneficios por nivel.
+ * `benefits` sale del nivel de la membresía (`[]` si no tiene).
  */
 export interface LoginResponse extends AuthResponse {
-  membership: { code: string; status: MembershipStatus } | null;
-  benefits: [];
+  membership: { code: string; status: MembershipStatus; level: MembershipLevel } | null;
+  benefits: Benefit[];
 }

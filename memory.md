@@ -14,7 +14,7 @@
 | HU-004 | Completa salvo prueba manual | Columnas nuevas en `Movie` (`synopsis`, `cast`, `bannerUrl`, `trailerUrl`) y `Showtime.price`; `GET /movies/:id` (detalle con `formats`, `languages`, `prices` y `showtimes` futuras), `GET /movies/:id/functions`, `GET /movies/:id/recommendations` (públicos, `?cityId=` opcional en detalle y funciones); `MovieDao`; seed ampliado con `refresh` | Prueba manual contra Postgres |
 | HU-005 | Completa salvo prueba manual | Entidad `ReleaseNotification` (tabla `ReleaseNotifications`, único `(userId, movieId)`); `GET /movies/upcoming` y `/movies/upcoming/:id` (públicos, orden por fecha, `daysUntilRelease`); `POST /notifications/upcoming` (JWT, 201, sin duplicados RN-019); seed con estrenos próximos y uno vencido; RN-020: `ReleaseNotificationJob` (cada hora) envía el correo (emulado sin `SMTP_HOST`) a las solicitudes `PENDING` de películas `ACTIVE` y las pasa a `SENT` | Prueba manual contra Postgres |
 | HU-006 | Completa salvo prueba manual | Captcha, registro transaccional (usuario + membresía **Activa** con código `RTV-XXXXXXXXXX`), BCrypt, contraseña ≥10 con complejidad (DTO y validador), `gender`/`favoriteCinemaId`, correo de activación (emulado sin `SMTP_HOST`), `POST /auth/verify-email` (+ alias `/activate`), `POST /membership/create` (JWT) | Prueba manual contra Postgres. El perfil es solo `User` (sin Profile, historial, billetera ni preferencias: decisión de la persona) |
-| HU-007 | Completa salvo prueba manual | JWT 15 min, refresh 7 d en BD, **una sola sesión viva** (RN-030: cada login revoca las previas), logout, bloqueo 15 min tras 5 intentos (un fallo con el bloqueo vigente no lo prolonga), solo cuentas activas, cookies; login con `membership`, `benefits: []` (provisional hasta HU-008) y `user`; `POST /auth/forgot-password` y `/reset-password`; auditoría `AccessAudits` (login, login fallido, bloqueo, reset) con IP y user-agent | Prueba manual contra Postgres. `benefits` reales (HU-008). No se auditan refresh, logout ni activación (decisión) |
+| HU-007 | Completa salvo prueba manual | JWT 15 min, refresh 7 d en BD, **una sola sesión viva** (RN-030: cada login revoca las previas), logout, bloqueo 15 min tras 5 intentos (un fallo con el bloqueo vigente no lo prolonga), solo cuentas activas, cookies; login con `membership` (con `level`), `benefits` por nivel (HU-008) y `user`; `POST /auth/forgot-password` y `/reset-password`; auditoría `AccessAudits` (login, login fallido, bloqueo, reset) con IP y user-agent | Prueba manual contra Postgres. No se auditan refresh, logout ni activación (decisión) |
 | HU-008 | No iniciada | — | `GET`/`PUT /profile`, `GET /membership`, `/membership/benefits`: QR único, nivel, descuentos por nivel, bonos, historial de compras, reservas activas, preferencias; cambio de correo con nueva validación (RN-034) |
 | HU-009 | No iniciada | — | `GET /functions/:id` y `/prices`; solo funciones activas y no iniciadas; precio según formato, sala y horario |
 | HU-010 | No iniciada | — | Seat y SeatLock con 7 estados; mapa de sillas; bloqueo transaccional 10 min; liberación manual y automática; máximo por función; auditoría de bloqueos y liberaciones; resumen con total |
@@ -115,7 +115,7 @@ Por historia:
 - [x] HU-008: el enum `Membership` (BASICA/PLATA) y `User.membership` se eliminaron; los niveles viven en `Memberships.level`.
 - [x] HU-007: RN-030 (una sesión viva), login con membresía, `POST /auth/forgot-password` y `/reset-password` (el token vive en columnas de `User`, `resetToken`/`resetTokenExpires`: no hace falta tabla `PasswordResetToken`).
 - [x] HU-007: auditoría de accesos (`AccessAudits`).
-- [ ] HU-007: `benefits` reales en el login (los rellena HU-008; hoy `[]`).
+- [x] HU-007: `benefits` reales en el login (HU-008 paso 3).
 - [ ] HU-007: prueba manual contra Postgres (la tabla `AccessAudits` y el enum la crea `synchronize`): login correcto (200 con `membership`/`benefits`), 5 fallos seguidos (401 y luego 403 con contraseña correcta; filas `LOGIN_FAILED` y `ACCOUNT_LOCKED`), segundo login (el refresh del primero da 401), `forgot-password` (el log emulado muestra el enlace) y `reset-password` (200; reuso 400), comprobar filas en `AccessAudits` con `ip`/`userAgent`.
 - [ ] HU-007 (propuesta, no implementada): rate limiting en `POST /auth/forgot-password` (riesgo: spam de correos a una víctima y carga de SMTP). `agent.md` §4.2 lo deja fuera; decidir con el equipo.
 - [ ] HU-008: `GET`/`PUT /profile`, `GET /membership`, `/membership/benefits`; reservas activas; cambio de correo con nueva validación.
@@ -158,6 +158,14 @@ No se implementa (no pertenece a HU-001 a HU-010):
 19. [x] HU-006: el token de activación se guardaba **en claro** (`User.activationToken`); `agent.md` §4.8 exige SHA-256. Resuelto: `register` guarda `hashToken(token)` y `activate` busca por el hash — `auth.service.ts`, `user.dao.ts`.
 
 ## Registro de cambios
+
+### 2026-10-16 — feat(HU-008): login con beneficios reales (paso 3 de 6)
+- **Archivos:** `src/modules/auth/auth.service.ts`, `src/modules/auth/interfaces/auth-response.interface.ts` (+ specs de service y controller), `memory.md`.
+- **Qué:** `LoginResponse.membership` → `{ code, status, level } | null` y `benefits: Benefit[]` calculado con `benefitsFor(level)` (el mismo que `/membership/benefits`); sin membresía, `[]`.
+- **Por qué:** HU-007 pedía beneficios activos en el login; quedaban provisionales hasta HU-008.
+- **Impacto:** contrato del login: `membership.level` nuevo y `benefits` ya no es siempre `[]` (**avisar al frontend**).
+- **Verificación:** `npm run test` ✅ (373/373) · `npm run lint` ✅ · `npm run build` ✅.
+- **Pendiente derivado:** pasos 4 a 6.
 
 ### 2026-10-16 — feat(HU-008): `GET /membership` y `GET /membership/benefits` (paso 2 de 6)
 - **Archivos:** `src/modules/membership/membership.{controller,service}.ts` (+specs), `memory.md`.
