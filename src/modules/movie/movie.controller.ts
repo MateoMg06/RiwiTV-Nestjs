@@ -8,7 +8,7 @@ import { MovieService } from './movie.service.js';
 export class MovieController {
   constructor(private readonly movieService: MovieService) {}
 
-  // Las rutas con `:id` deben declararse después de las fijas (`weekly`, `today`; HU-005: `upcoming`).
+  // Las rutas con `:id` deben declararse después de las fijas (`weekly`, `today`, `upcoming`).
   @Get(['', 'weekly', 'filter'])
   @Public()
   getWeekly(@Query() query: CatalogQueryDto) {
@@ -19,6 +19,18 @@ export class MovieController {
   @Public()
   getToday(@Query() query: CatalogQueryDto) {
     return this.movieService.getToday(query);
+  }
+
+  @Get('upcoming')
+  @Public()
+  getUpcoming() {
+    return this.movieService.getUpcoming();
+  }
+
+  @Get('upcoming/:id')
+  @Public()
+  getUpcomingDetail(@Param('id', ParseIntPipe) id: number) {
+    return this.movieService.getUpcomingDetail(id);
   }
 
   @Get(':id/functions')

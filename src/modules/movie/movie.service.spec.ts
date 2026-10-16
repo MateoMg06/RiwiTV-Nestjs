@@ -498,3 +498,92 @@ describe('MovieService.getRecommendations (HU-004)', () => {
     ]);
   });
 });
+
+describe('MovieService próximos estrenos (HU-005)', () => {
+  const now = new Date('2026-10-15T12:00:00Z');
+  const DAY = 86_400_000;
+  const upcoming = (id: number, releaseDate: Date) => ({
+    ...movieA,
+    id,
+    status: MovieStatus.UPCOMING,
+    releaseDate,
+    synopsis: 'Sinopsis',
+    cast: ['A', 'B'],
+    bannerUrl: 'https://img/banner.jpg',
+    trailerUrl: 'https://www.youtube.com/watch?v=abc',
+  });
+  let movieDao: {
+    findUpcoming: ReturnType<typeof vi.fn>;
+    findUpcomingById: ReturnType<typeof vi.fn>;
+  };
+  let service: MovieService;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
+    movieDao = { findUpcoming: vi.fn(), findUpcomingById: vi.fn() };
+    service = new MovieService({} as unknown as ShowtimeDao, movieDao as unknown as MovieDao);
+  });
+
+  afterEach(() => vi.useRealTimers());
+
+  it('getUpcoming mapea campos, trailerUrl y synopsis, y conserva el orden del DAO', async () => {
+    movieDao.findUpcoming.mockResolvedValue([
+      upcoming(5, new Date(now.getTime() + 2 * DAY)),
+      upcoming(6, new Date(now.getTime() + 9 * DAY)),
+    ]);
+
+    const result = await service.getUpcoming();
+
+    expect(result.map((m) => m.id)).toEqual([5, 6]);
+    expect(result[0]).toMatchObject({
+      id: 5,
+      name: 'Alfa',
+      audienceRating: 4.5,
+      synopsis: 'Sinopsis',
+      cast: ['A', 'B'],
+      bannerUrl: 'https://img/banner.jpg',
+      trailerUrl: 'https://www.youtube.com/watch?v=abc',
+      daysUntilRelease: 2,
+    });
+    expect(result[1].daysUntilRelease).toBe(9);
+  });
+
+  it('getUpcoming devuelve [] si no hay estrenos', async () => {
+    movieDao.findUpcoming.mockResolvedValue([]);
+    await expect(service.getUpcoming()).resolves.toEqual([]);
+  });
+
+  it.each([
+    ['exactamente +2 días', 2 * DAY, 2],
+    ['+2 días y 2,4 horas', 2 * DAY + 8_640_000, 3],
+    ['+1 ms', 1, 1],
+    ['en el pasado', -3 * DAY, 0],
+    ['ahora mismo', 0, 0],
+  ])('contador: %s', async (_label, offset, expected) => {
+    movieDao.findUpcomingById.mockResolvedValue(upcoming(5, new Date(now.getTime() + offset)));
+
+    const result = await service.getUpcomingDetail(5);
+
+    expect(result.daysUntilRelease).toBe(expected);
+    expect(result.daysUntilRelease).toBeGreaterThanOrEqual(0);
+  });
+
+  it('getUpcomingDetail devuelve los mismos campos que el listado', async () => {
+    const movie = upcoming(5, new Date(now.getTime() + 2 * DAY));
+    movieDao.findUpcoming.mockResolvedValue([movie]);
+    movieDao.findUpcomingById.mockResolvedValue(movie);
+
+    const [fromList] = await service.getUpcoming();
+    await expect(service.getUpcomingDetail(5)).resolves.toEqual(fromList);
+    expect(movieDao.findUpcomingById).toHaveBeenCalledWith(5);
+  });
+
+  it('getUpcomingDetail: 404 si no es un próximo estreno', async () => {
+    movieDao.findUpcomingById.mockResolvedValue(null);
+
+    await expect(service.getUpcomingDetail(99)).rejects.toThrow(
+      new NotFoundException('Próximo estreno no encontrado'),
+    );
+  });
+});

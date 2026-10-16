@@ -114,3 +114,50 @@ describe('MovieController detalle (HU-004)', () => {
     expect(service.getRecommendations).toHaveBeenCalledWith(1);
   });
 });
+
+describe('MovieController próximos estrenos (HU-005)', () => {
+  const proto = MovieController.prototype;
+  const routes = [
+    ['getUpcoming', 'upcoming'],
+    ['getUpcomingDetail', 'upcoming/:id'],
+  ] as const;
+
+  it.each(routes)('%s es GET %s y público', (name, path) => {
+    expect(Reflect.getMetadata(PATH_METADATA, proto[name])).toBe(path);
+    expect(Reflect.getMetadata(METHOD_METADATA, proto[name])).toBe(RequestMethod.GET);
+    expect(Reflect.getMetadata(IS_PUBLIC_KEY, proto[name])).toBe(true);
+  });
+
+  it('upcoming/:id valida id con ParseIntPipe', () => {
+    const args = Reflect.getMetadata(
+      ROUTE_ARGS_METADATA,
+      MovieController,
+      'getUpcomingDetail',
+    ) as Record<string, { data: string; pipes: unknown[] }>;
+    const param = Object.values(args).find((arg) => arg.data === 'id');
+    expect(param?.pipes).toContain(ParseIntPipe);
+  });
+
+  it('upcoming se declara después de today y antes de :id/functions, :id/recommendations y :id', () => {
+    const names = Object.getOwnPropertyNames(proto);
+    const index = (name: string) => names.indexOf(name);
+    for (const upcoming of ['getUpcoming', 'getUpcomingDetail']) {
+      for (const other of ['getFunctions', 'getRecommendations', 'getDetail']) {
+        expect(index(upcoming)).toBeLessThan(index(other));
+      }
+      expect(index(upcoming)).toBeGreaterThan(index('getToday'));
+    }
+  });
+
+  it('delega en el service', async () => {
+    const service = {
+      getUpcoming: vi.fn().mockResolvedValue([{ id: 1 }]),
+      getUpcomingDetail: vi.fn().mockResolvedValue({ id: 2 }),
+    };
+    const controller = new MovieController(service as unknown as MovieService);
+
+    await expect(controller.getUpcoming()).resolves.toEqual([{ id: 1 }]);
+    await expect(controller.getUpcomingDetail(2)).resolves.toEqual({ id: 2 });
+    expect(service.getUpcomingDetail).toHaveBeenCalledWith(2);
+  });
+});

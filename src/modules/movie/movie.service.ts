@@ -69,6 +69,17 @@ const toShowtime = (showtime: Showtime): WeeklyShowtime => ({
   cinema: { id: showtime.cinema.id, name: showtime.cinema.name },
 });
 
+export interface UpcomingMovie extends MovieBase {
+  synopsis: string;
+  cast: string[];
+  bannerUrl: string | null;
+  trailerUrl: string | null;
+  /** Días enteros que faltan para el estreno (redondeo hacia arriba, nunca negativo). */
+  daysUntilRelease: number;
+}
+
+const MS_PER_DAY = 86_400_000;
+
 const toMovieBase = (movie: Movie): MovieBase => ({
   id: movie.id,
   name: movie.name,
@@ -80,6 +91,18 @@ const toMovieBase = (movie: Movie): MovieBase => ({
   releaseDate: movie.releaseDate,
   status: movie.status,
   audienceRating: Number(movie.audienceRating),
+});
+
+const toUpcoming = (movie: Movie, now: Date): UpcomingMovie => ({
+  ...toMovieBase(movie),
+  synopsis: movie.synopsis,
+  cast: movie.cast,
+  bannerUrl: movie.bannerUrl,
+  trailerUrl: movie.trailerUrl,
+  daysUntilRelease: Math.max(
+    0,
+    Math.ceil((movie.releaseDate.getTime() - now.getTime()) / MS_PER_DAY),
+  ),
 });
 
 /** Días siguientes a hoy que cubre la cartelera (RN-012: 7 días en total). */
@@ -199,6 +222,20 @@ export class MovieService {
     const movie = await this.findActiveOrFail(id);
     const recommended = await this.movieDao.findRecommendations(movie);
     return recommended.map(toMovieBase);
+  }
+
+  /** Próximos estrenos (HU-005) por fecha, con contador regresivo. */
+  async getUpcoming(): Promise<UpcomingMovie[]> {
+    const movies = await this.movieDao.findUpcoming();
+    const now = new Date();
+    return movies.map((movie) => toUpcoming(movie, now));
+  }
+
+  /** Detalle de un próximo estreno; 404 si no existe, ya se estrenó o está en cartelera. */
+  async getUpcomingDetail(id: number): Promise<UpcomingMovie> {
+    const movie = await this.movieDao.findUpcomingById(id);
+    if (!movie) throw new NotFoundException('Próximo estreno no encontrado');
+    return toUpcoming(movie, new Date());
   }
 
   private async findActiveOrFail(id: number): Promise<Movie> {

@@ -41,6 +41,11 @@ export enum MovieStatus {
   INACTIVE = 'INACTIVE',
 }
 
+/** Estado de una solicitud de aviso de estreno. `SENT` se añadirá con el envío del correo (RN-020). */
+export enum NotificationStatus {
+  PENDING = 'PENDING',
+}
+
 /** Audio de una funcion. */
 export enum AudioType {
   DUBBED = 'DUBBED',

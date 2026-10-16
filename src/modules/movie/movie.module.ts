@@ -8,5 +8,6 @@ import { MovieService } from './movie.service.js';
   imports: [ShowtimeModule],
   controllers: [MovieController],
   providers: [MovieService, MovieDao],
+  exports: [MovieDao],
 })
 export class MovieModule {}

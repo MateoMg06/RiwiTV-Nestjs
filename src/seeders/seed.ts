@@ -123,7 +123,7 @@ async function seed(): Promise<void> {
     }
     const [centro, cerrado, sur] = cinemaRows;
 
-    // Películas: 5 activas, 2 próximas y 1 inactiva (solo las activas salen en la cartelera).
+    // Películas: 5 activas, 4 próximas (una con fecha vencida) y 1 inactiva (solo las activas salen en la cartelera).
     // «Sombras del Pasado» y «Corazón de Barrio» no tienen funciones.
     const movieData = [
       {
@@ -195,6 +195,7 @@ async function seed(): Promise<void> {
         director: 'Sofía Mejía',
         status: MovieStatus.UPCOMING,
         audienceRating: '0.0',
+        releaseDays: 30,
       },
       {
         name: 'Clásico Retirado',
@@ -237,11 +238,44 @@ async function seed(): Promise<void> {
         director: 'Paula Echeverri',
         status: MovieStatus.UPCOMING,
         audienceRating: '4.8',
+        releaseDays: 10,
+      },
+      // Para probar próximos estrenos (HU-005): «Estreno Vencido» ya pasó su fecha (no debe salir).
+      {
+        name: 'Estreno Vencido',
+        synopsis: 'Película marcada como próximo estreno cuya fecha de estreno ya pasó.',
+        cast: ['Andrea Lopera', 'Camilo Ríos'],
+        posterUrl: 'https://picsum.photos/seed/estreno-vencido-poster/400/600',
+        bannerUrl: 'https://picsum.photos/seed/estreno-vencido-banner/1280/480',
+        trailerUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+        genre: 'Acción',
+        classification: AgeRating.DIECISEIS,
+        duration: 98,
+        director: 'Rafael Muñoz',
+        status: MovieStatus.UPCOMING,
+        audienceRating: '0.0',
+        releaseDays: -5,
+      },
+      {
+        name: 'Última Frontera',
+        synopsis: 'Un guardabosques persigue a unos traficantes en el límite del país.',
+        cast: ['Jorge Peña', 'Diana Castaño'],
+        posterUrl: 'https://picsum.photos/seed/ultima-frontera-poster/400/600',
+        bannerUrl: 'https://picsum.photos/seed/ultima-frontera-banner/1280/480',
+        trailerUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+        genre: 'Acción',
+        classification: AgeRating.DIECISEIS,
+        duration: 121,
+        director: 'Rafael Muñoz',
+        status: MovieStatus.UPCOMING,
+        audienceRating: '0.0',
+        releaseDays: 3,
       },
     ];
     const movieRows: Movie[] = [];
-    for (const data of movieData) {
-      const releaseDate = data.status === MovieStatus.UPCOMING ? dayAt(30, 0) : dayAt(-60, 0);
+    for (const { releaseDays, ...data } of movieData) {
+      const defaultDays = data.status === MovieStatus.UPCOMING ? 30 : -60;
+      const releaseDate = dayAt(releaseDays ?? defaultDays, 0);
       movieRows.push(
         await findOrCreate(
           movies,
