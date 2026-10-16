@@ -312,17 +312,22 @@ export class AuthService {
       throw new BadRequestException('La contraseña no cumple con los parámetros requeridos');
     }
 
-    const user = await this.userDao.findByResetTokenHash(this.hashToken(dto.token));
+    const tokenHash = this.hashToken(dto.token);
+    const user = await this.userDao.findByResetTokenHash(tokenHash);
 
     if (!user || !user.resetTokenExpires || user.resetTokenExpires.getTime() <= Date.now()) {
       throw new BadRequestException('Token de restablecimiento inválido o expirado');
     }
 
-    await this.userDao.update(user.id, {
-      password: await this.bcrypt.hashPassword(dto.password, this.saltRounds),
-      resetToken: null,
-      resetTokenExpires: null,
-    });
+    // UPDATE condicional: si otra petición ya consumió el token, no se revoca ni se audita.
+    const consumed = await this.userDao.consumeResetToken(
+      user.id,
+      tokenHash,
+      await this.bcrypt.hashPassword(dto.password, this.saltRounds),
+    );
+    if (!consumed) {
+      throw new BadRequestException('Token de restablecimiento inválido o expirado');
+    }
     await this.authDao.revokeAllSessions(user.id);
     await this.audit(AccessEvent.PASSWORD_RESET, user.email, user.id, context);
 

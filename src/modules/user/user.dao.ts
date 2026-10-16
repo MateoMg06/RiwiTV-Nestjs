@@ -93,6 +93,25 @@ export class UserDao {
       .getOne();
   }
 
+  /**
+   * Guarda la nueva contraseña y anula el token de restablecimiento en un único UPDATE
+   * condicional (HU-007): solo prospera si el hash sigue vigente. Así, dos peticiones
+   * simultáneas con el mismo token no pueden pasar ambas; devuelve `false` si no hubo fila.
+   */
+  async consumeResetToken(id: number, hash: string, passwordHash: string): Promise<boolean> {
+    const result = await this.repo
+      .createQueryBuilder()
+      .update(User)
+      .set({ password: passwordHash, resetToken: null, resetTokenExpires: null })
+      .where('id = :id AND resetToken = :hash AND resetTokenExpires > :now', {
+        id,
+        hash,
+        now: new Date(),
+      })
+      .execute();
+    return result.affected === 1;
+  }
+
   /** Con `manager` participa en la transacción del registro (HU-006). */
   create(data: Partial<User>, manager?: EntityManager): Promise<User> {
     const repo = manager ? manager.getRepository(User) : this.repo;

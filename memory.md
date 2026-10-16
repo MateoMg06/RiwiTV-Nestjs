@@ -159,6 +159,14 @@ No se implementa (no pertenece a HU-001 a HU-010):
 
 ## Registro de cambios
 
+### 2026-10-16 — fix(HU-007): consumo atómico del token de restablecimiento
+- **Archivos:** `src/modules/user/user.dao.ts` (+spec), `src/modules/auth/auth.service.ts` (+spec), `memory.md`.
+- **Qué:** `resetPassword` ya no hace un UPDATE sin condición tras leer el usuario. Nuevo `UserDao.consumeResetToken(id, hash, passwordHash)`: un solo `UPDATE ... WHERE id = :id AND resetToken = :hash AND resetTokenExpires > :now` que guarda la contraseña y pone `resetToken`/`resetTokenExpires` a null; devuelve `affected === 1`. Si da `false` → 400 «Token de restablecimiento inválido o expirado», sin revocar sesiones ni auditar `PASSWORD_RESET`.
+- **Por qué:** hallazgo del revisor: dos peticiones simultáneas con el mismo token podían pasar ambas (lectura y escritura separadas).
+- **Impacto:** ninguno en el contrato HTTP; sin cambios de BD ni variables.
+- **Verificación:** `npm run test` ✅ (360/360) · `npm run lint` ✅ · `npm run build` ✅.
+- **Pendiente derivado:** ninguno.
+
 ### 2026-10-16 — feat(HU-007): auditoría de accesos con IP y dispositivo (paso 6 de 6)
 - **Archivos:** `src/common/enums/domain.enums.ts` (`AccessEvent`), `src/modules/auth/entities/access-audit.entity.ts`, `src/modules/auth/access-audit.dao.ts` (+spec), `src/modules/auth/auth.module.ts`, `src/database.ts` (entidad registrada; Prettier reformateó también líneas ya existentes del archivo), `src/modules/auth/auth.service.ts` (+spec), `agent.md` (§1.2, §5.1), `memory.md`.
 - **Qué:** tabla `AccessAudits` (`id`, `userId` int nullable con índice, `email`, `event` enum, `ip`, `userAgent`, `createdAt`; sin relaciones). `AuthService.audit()` privado y fail-open. `LOGIN_SUCCESS` al terminar el login; `LOGIN_FAILED` en credenciales inválidas, cuenta inactiva y cuenta bloqueada con contraseña correcta; `ACCOUNT_LOCKED` cuando se fija `lockedUntil` (`registerFailedAttempt` ahora devuelve si bloqueó); `PASSWORD_RESET` en `resetPassword` (usa el `context` ya recibido).

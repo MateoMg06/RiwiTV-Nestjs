@@ -51,3 +51,40 @@ describe('UserDao.findByResetTokenHash (HU-007)', () => {
     expect(qb.where).toHaveBeenCalledWith('user.resetToken = :hash', { hash: 'abc' });
   });
 });
+
+describe('UserDao.consumeResetToken (HU-007)', () => {
+  const build = (affected: number) => {
+    const qb = {
+      update: vi.fn().mockReturnThis(),
+      set: vi.fn().mockReturnThis(),
+      where: vi.fn().mockReturnThis(),
+      execute: vi.fn().mockResolvedValue({ affected }),
+    };
+    const dataSource = {
+      getRepository: vi.fn().mockReturnValue({ createQueryBuilder: vi.fn().mockReturnValue(qb) }),
+    } as unknown as DataSource;
+    return { qb, dao: new UserDao(dataSource) };
+  };
+
+  it('actualiza con la condición id + hash + vigencia y anula el token', async () => {
+    const { qb, dao } = build(1);
+
+    await expect(dao.consumeResetToken(7, 'h', 'pw')).resolves.toBe(true);
+
+    expect(qb.set).toHaveBeenCalledWith({
+      password: 'pw',
+      resetToken: null,
+      resetTokenExpires: null,
+    });
+    expect(qb.where).toHaveBeenCalledWith(
+      'id = :id AND resetToken = :hash AND resetTokenExpires > :now',
+      { id: 7, hash: 'h', now: expect.any(Date) },
+    );
+  });
+
+  it('devuelve false si ninguna fila cumple la condición (token ya consumido)', async () => {
+    const { dao } = build(0);
+
+    await expect(dao.consumeResetToken(7, 'h', 'pw')).resolves.toBe(false);
+  });
+});

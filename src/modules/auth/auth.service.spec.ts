@@ -120,6 +120,7 @@ describe('AuthService', () => {
       findByActivationToken: vi.fn(),
       findByEmail: vi.fn(),
       findByResetTokenHash: vi.fn(),
+      consumeResetToken: vi.fn().mockResolvedValue(true),
       update: vi.fn(),
     } as unknown as UserDao;
 
@@ -820,7 +821,18 @@ describe('AuthService', () => {
       await expect(service.resetPassword(dto)).rejects.toThrow(
         'Token de restablecimiento inválido o expirado',
       );
-      expect(userDao.update).not.toHaveBeenCalled();
+      expect(userDao.consumeResetToken).not.toHaveBeenCalled();
+    });
+
+    it('si otra petición consumió el token antes (affected 0) da 400 sin revocar ni auditar', async () => {
+      (userDao.findByResetTokenHash as ReturnType<typeof vi.fn>).mockResolvedValue(withToken());
+      (userDao.consumeResetToken as ReturnType<typeof vi.fn>).mockResolvedValue(false);
+
+      await expect(service.resetPassword(dto)).rejects.toThrow(
+        'Token de restablecimiento inválido o expirado',
+      );
+      expect(authDao.revokeAllSessions).not.toHaveBeenCalled();
+      expect(accessAuditDao.create).not.toHaveBeenCalled();
     });
 
     it('guarda bcrypt, anula el token y revoca todas las sesiones', async () => {
@@ -830,12 +842,13 @@ describe('AuthService', () => {
         message: 'Contraseña actualizada',
       });
 
-      const patch = (userDao.update as ReturnType<typeof vi.fn>).mock.calls[0][1];
-      expect(patch.password).not.toBe(dto.password);
-      expect(await bcrypt.comparePassword(dto.password, patch.password)).toBe(true);
-      expect(patch.resetToken).toBeNull();
-      expect(patch.resetTokenExpires).toBeNull();
-      expect(patch).not.toHaveProperty('lockedUntil');
+      const [id, hash, passwordHash] = (userDao.consumeResetToken as ReturnType<typeof vi.fn>).mock
+        .calls[0];
+      expect(id).toBe(1);
+      expect(hash).toBe(createHash('sha256').update(TOKEN).digest('hex'));
+      expect(passwordHash).not.toBe(dto.password);
+      expect(await bcrypt.comparePassword(dto.password, passwordHash)).toBe(true);
+      expect(userDao.update).not.toHaveBeenCalled();
       expect(authDao.revokeAllSessions).toHaveBeenCalledWith(1);
     });
 
