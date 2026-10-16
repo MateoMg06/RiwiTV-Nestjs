@@ -111,11 +111,11 @@ describe('AuthGuard', () => {
       expect(request).toHaveProperty('user.sub', '1');
     });
 
-    it('acepta la cookie httpOnly access_token', async () => {
+    it('acepta la cookie httpOnly accessToken', async () => {
       const token = signAccess({ sub: '7', role: 'usuario' });
 
       const guard = buildGuard();
-      const request = { headers: {}, cookies: { access_token: token } };
+      const request = { headers: {}, cookies: { accessToken: token } };
 
       await expect(guard.canActivate(makeContext(request))).resolves.toBe(true);
       expect(request).toHaveProperty('user.sub', '7');
@@ -128,7 +128,7 @@ describe('AuthGuard', () => {
       const guard = buildGuard();
       const request = {
         headers: { authorization: `Bearer ${headerToken}` },
-        cookies: { access_token: cookieToken },
+        cookies: { accessToken: cookieToken },
       };
 
       await guard.canActivate(makeContext(request));

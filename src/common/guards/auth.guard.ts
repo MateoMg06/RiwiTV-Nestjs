@@ -116,7 +116,7 @@ export class AuthGuard implements CanActivate {
       }
     }
 
-    const cookieToken = request.cookies?.['access_token'];
+    const cookieToken = request.cookies?.['accessToken'];
 
     return typeof cookieToken === 'string' && cookieToken ? cookieToken : undefined;
   }

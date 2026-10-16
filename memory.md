@@ -1,7 +1,7 @@
 # memory.md — RiwiTV NestJS
 
 > Memoria de trabajo del proyecto. **Se actualiza con cada cambio** (ver `agent.md`, sección 0).
-> Rama: `feature/authentication` · Último commit revisado: `ca1a330` (feat: password validator and captcha applied).
+> Rama: `feature/develop` (incluye `feature/authentication` hasta `35c326d` feat: docker).
 
 ## Estado actual
 
@@ -67,6 +67,16 @@
 15. [ ] Email no implementado (nodemailer instalado sin uso).
 
 ## Registro de cambios
+
+### 2026-10-15 — fix: el guard lee la cookie `accessToken`
+- **Archivos:** `src/common/guards/auth.guard.ts`, `src/common/guards/auth.guard.spec.ts`
+- **Qué:** el guard leía la cookie `access_token`, pero desde `35c326d` el controller la emite como `accessToken`. Con cookie (navegador) ninguna ruta protegida reconocía la sesión.
+- **Por qué:** regresión del commit `35c326d`. Se mantiene `accessToken` porque es el nombre del Express original (compatibilidad con el frontend).
+- **Impacto:** autenticación por cookie vuelve a funcionar. Contrato: cookie `accessToken`.
+- **Verificación:** `npm run test` ✅ (104/104) · `npm run lint` ✅ · `npm run build` ✅ (ejecutados sobre el conjunto de arreglos de esta sesión).
+- **Pendiente derivado:** ninguno.
+
+
 
 ### 2026-10-15 — docs: añadir contexto del repo original a agent.md y memory.md
 - **Archivos:** `agent.md`, `memory.md`
