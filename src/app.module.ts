@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { createObserveModule } from '@nestjs/observe';
+import { ScheduleModule } from '@nestjs/schedule';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { DatabaseModule } from './database.js';
@@ -24,6 +25,7 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
       appSecret: process.env.OBSERVE_APP_SECRET ?? 'dev-app-secret',
       serviceId: 'riwi-tv-nestjs',
     }),
+    ScheduleModule.forRoot(),
     DatabaseModule,
     CountryModule,
     UserModule,

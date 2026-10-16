@@ -23,8 +23,8 @@ export class NotificationService {
   ) {}
 
   /**
-   * Registra la solicitud de aviso de un próximo estreno. El correo (RN-020) llega con HU-006:
-   * por ahora la solicitud queda `PENDING`.
+   * Registra la solicitud de aviso de un próximo estreno. Queda `PENDING`; el correo (RN-020) lo
+   * envía `ReleaseNotificationJob` cuando la película pasa a `ACTIVE`.
    */
   async requestUpcoming(
     userId: number,
