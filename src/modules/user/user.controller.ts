@@ -8,13 +8,13 @@ import {
   Delete,
   Req,
   ForbiddenException,
+  ParseIntPipe,
 } from '@nestjs/common';
 import type { Request } from 'express';
 import { UserService } from './user.service.js';
 import { CreateUserDto } from './create-user.dto.js';
 import { UpdateUserDto } from './update-user.dto.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
-import { Public } from '../../common/decorators/public.decorator.js';
 import { UserRole } from '../../common/enums/domain.enums.js';
 
 interface Requester {
@@ -43,36 +43,45 @@ function ensureOwnOrAdmin(requester: Requester | null, targetId: number): void {
 export class UserController {
   constructor(private readonly userService: UserService) {}
 
-  @Public()
+  /**
+   * Alta administrativa. El registro publico es `POST /auth/register`, que
+   * exige captcha y genera el token de activacion; abrir este endpoint
+   * permitiria saltarse ambos.
+   */
+  @Roles(UserRole.ADMIN)
   @Post()
   create(@Body() createUserDto: CreateUserDto) {
     return this.userService.create(createUserDto);
   }
 
-  @Roles("admin")
+  @Roles(UserRole.ADMIN)
   @Get()
   findAll() {
     return this.userService.findAll();
   }
 
-  @Roles("admin", "usuario")
+  @Roles(UserRole.ADMIN, UserRole.USUARIO)
   @Get(':id')
-  findOne(@Param('id') id: string, @Req() request: Request) {
-    ensureOwnOrAdmin(getRequester(request), +id);
-    return this.userService.findOne(+id);
+  findOne(@Param('id', ParseIntPipe) id: number, @Req() request: Request) {
+    ensureOwnOrAdmin(getRequester(request), id);
+    return this.userService.findOne(id);
   }
 
-  @Roles("admin", "usuario")
+  @Roles(UserRole.ADMIN, UserRole.USUARIO)
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto, @Req() request: Request) {
-    ensureOwnOrAdmin(getRequester(request), +id);
-    return this.userService.update(+id, updateUserDto);
+  update(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() updateUserDto: UpdateUserDto,
+    @Req() request: Request,
+  ) {
+    ensureOwnOrAdmin(getRequester(request), id);
+    return this.userService.update(id, updateUserDto);
   }
 
-  @Roles("admin", "usuario")
+  @Roles(UserRole.ADMIN, UserRole.USUARIO)
   @Delete(':id')
-  remove(@Param('id') id: string, @Req() request: Request) {
-    ensureOwnOrAdmin(getRequester(request), +id);
-    return this.userService.remove(+id);
+  remove(@Param('id', ParseIntPipe) id: number, @Req() request: Request) {
+    ensureOwnOrAdmin(getRequester(request), id);
+    return this.userService.remove(id);
   }
 }

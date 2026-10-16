@@ -12,7 +12,7 @@
 | Auth: login | Implementado | Bloqueo 15 min tras `MAX_FAILED_ATTEMPTS`; hash ficticio anti-enumeración |
 | Auth: refresh con rotación | Implementado | Cookie `refresh_token` con path `/api/auth` |
 | Auth: logout / logout-all / me | Implementado | |
-| Usuarios: CRUD | Parcial | Falta control de propiedad y alinear contrato con la API original |
+| Usuarios: CRUD | Parcial | Propiedad y roles OK; falta alinear contrato con la API original |
 | Rutas heredadas `/api/users/auth`, `/api/users/legacy-login` | No migradas | Pendiente confirmar si algún cliente las usa |
 | Migraciones / seeders | No existen | `synchronize: true` |
 | Swagger | Básico | Sin metadatos ni `@ApiProperty` |
@@ -37,7 +37,7 @@
 - [ ] Comparar endpoints antiguos de usuarios con `/user` y `/auth` y documentar diferencias de contrato.
 - [ ] Decidir sobre `/api/users/auth` y `/api/users/legacy-login` (¿algún cliente las usa?).
 - [ ] Verificar equivalencia de respuestas de creación, listado, actualización y validaciones.
-- [ ] Autorización: un `usuario` solo puede ver/editar/borrar su propia cuenta; admin conserva permisos.
+- [x] Autorización: un `usuario` solo puede ver/editar/borrar su propia cuenta; admin conserva permisos.
 - [ ] Revisar flujo completo: registro → activación → login → refresh → logout → me.
 - [ ] Mantener rutas de compatibilidad si el frontend aún las necesita.
 - [ ] **Decidir** qué contrato manda: original o Nest. Diferencias en `agent.md` §5: cookie `accessToken` vs `access_token`, formato de error, 201 vs 200, respuesta de register, `/users` vs `/user`, prefijos `/api/v1`.
@@ -55,7 +55,7 @@
 3. [x] `revokedAt: undefined` no filtra en TypeORM; usar `IsNull()` — `src/modules/auth/auth.dao.ts`.
 4. [ ] `__dirname` en ESM — `src/config/config.service.ts`.
 5. [ ] `.env` no se carga en `process.env` pero varios módulos lo leen de ahí — `database.ts`, `cors.ts`, `auth.service.ts`, `user.service.ts`.
-6. [ ] `/user/:id` sin control de propiedad; `POST /user` sin `@Roles`; `+id` sin `ParseIntPipe` — `src/modules/user/user.controller.ts`.
+6. [x] `/user/:id` sin control de propiedad; `POST /user` sin `@Roles`; `+id` sin `ParseIntPipe` — `src/modules/user/user.controller.ts`.
 7. [ ] Política de contraseña inconsistente (DTO 8–72 vs validador ≥10 + complejidad).
 8. [ ] `AuthPayload` declara `name`/`membership` que el token no trae.
 9. [ ] Credenciales de ejemplo de ObserveModule en `app.module.ts`; nombres de variables inconsistentes en `.env.example`.
@@ -67,6 +67,14 @@
 15. [ ] Email no implementado (nodemailer instalado sin uso).
 
 ## Registro de cambios
+
+### 2026-10-15 — fix: `POST /user` solo admin y `ParseIntPipe` en `/user/:id`
+- **Archivos:** `src/modules/user/user.controller.ts`, `src/modules/user/user.controller.spec.ts`
+- **Qué:** `POST /user` pasa de `@Public()` a `@Roles(UserRole.ADMIN)`. Los `:id` usan `ParseIntPipe` (id no numérico ⇒ 400). Roles con `UserRole` en vez de strings. Los `it.fails` de roles pasan a tests normales.
+- **Por qué:** Bug #6. Con `@Public()` se creaban cuentas sin captcha ni token de activación (quedaban inactivas para siempre).
+- **Impacto:** `POST /api/user` exige token de admin. El registro público sigue en `POST /api/auth/register`.
+- **Verificación:** `npm run test` ✅ (104/104) · `npm run lint` ✅ · `npm run build` ✅ (ejecutados sobre el conjunto de arreglos de esta sesión).
+- **Pendiente derivado:** ninguno.
 
 ### 2026-10-15 — fix: el captcha no expone la respuesta y se reparan los specs de servicios
 - **Archivos:** `src/common/utils/captcha.ts`, `src/modules/auth/auth.service.spec.ts`, `src/modules/user/user.service.spec.ts`
