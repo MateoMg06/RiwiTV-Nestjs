@@ -166,6 +166,12 @@ No se implementa (no pertenece a HU-001 a HU-010):
 
 ## Registro de cambios
 
+### 2026-10-16 — feat(HU-009): `ShowtimeDao.findSelectableById` (paso 2 de 4)
+- **Archivos:** `src/modules/showtime/showtime.dao.ts`, `src/modules/showtime/showtime.dao.spec.ts`, `memory.md`.
+- **Qué:** consulta única (`innerJoinAndSelect` de película y cine, `getOne`) con `showtime.id`, película `ACTIVE`, función `<> CANCELLED` (SOLD_OUT incluida), cine activo y `startsAt > ahora` (RN-035). `null` si no hay fila.
+- **Por qué:** base de `GET /functions/:id` y `/prices`.
+- **Impacto:** ninguno todavía en la API.
+- **Verificación:** `npm run test` ✅ (421/421) · `npm run lint` ✅ · `npm run build` ✅
 ### 2026-10-16 — refactor(HU-009): mapper de funciones compartido (paso 1 de 4)
 - **Archivos:** `src/modules/showtime/showtime.mapper.ts` (nuevo), `src/modules/movie/movie.service.ts`, `src/modules/auth/auth.service.ts`, `memory.md`.
 - **Qué:** `WeeklyShowtime` y `toShowtime` pasan de `movie.service.ts` a `showtime.mapper.ts`; `MovieService` los importa. Sin cambio de comportamiento. Además, el comentario de `DEFAULT_RESET_EXPIRY` en `auth.service.ts` decía «token JWT de restablecimiento» pero el token es aleatorio (`randomBytes`) guardado como SHA-256; ahora dice «Vigencia por defecto del token de restablecimiento de contrasena.».

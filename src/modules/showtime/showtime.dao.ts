@@ -84,4 +84,21 @@ export class ShowtimeDao {
 
     return query.orderBy('showtime.startsAt', 'ASC').getMany();
   }
+
+  /**
+   * Función que aún se puede elegir (HU-009): futura (RN-035), no cancelada (incluye SOLD_OUT),
+   * de película activa y cine activo, en una sola consulta.
+   */
+  findSelectableById(id: number): Promise<Showtime | null> {
+    return this.repo
+      .createQueryBuilder('showtime')
+      .innerJoinAndSelect('showtime.movie', 'movie')
+      .innerJoinAndSelect('showtime.cinema', 'cinema')
+      .where('showtime.id = :id', { id })
+      .andWhere('movie.status = :movieStatus', { movieStatus: MovieStatus.ACTIVE })
+      .andWhere('showtime.status <> :cancelled', { cancelled: ShowtimeStatus.CANCELLED })
+      .andWhere('cinema.isActive = true')
+      .andWhere('showtime.startsAt > :now', { now: new Date() })
+      .getOne();
+  }
 }

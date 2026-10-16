@@ -2,7 +2,12 @@ import { describe, it, expect, vi } from 'vitest';
 import type { DataSource } from 'typeorm';
 import { ShowtimeDao } from './showtime.dao.js';
 import { Showtime } from './showtime.entity.js';
-import { AgeRating, MovieStatus, ShowFormat, ShowtimeStatus } from '../../common/enums/domain.enums.js';
+import {
+  AgeRating,
+  MovieStatus,
+  ShowFormat,
+  ShowtimeStatus,
+} from '../../common/enums/domain.enums.js';
 
 function setup(result: unknown[] = []) {
   const qb = {
@@ -12,6 +17,7 @@ function setup(result: unknown[] = []) {
     orderBy: vi.fn().mockReturnThis(),
     addOrderBy: vi.fn().mockReturnThis(),
     getMany: vi.fn().mockResolvedValue(result),
+    getOne: vi.fn().mockResolvedValue(result[0] ?? null),
   };
   const repo = { createQueryBuilder: vi.fn().mockReturnValue(qb) };
   const dataSource = { getRepository: vi.fn().mockReturnValue(repo) } as unknown as DataSource;
@@ -158,5 +164,55 @@ describe('ShowtimeDao.findFutureByMovie (HU-004)', () => {
     await dao.findFutureByMovie(9, 4);
 
     expect(qb.andWhere).toHaveBeenCalledWith('cinema.city = :cityId', { cityId: 4 });
+  });
+});
+
+describe('ShowtimeDao.findSelectableById (HU-009)', () => {
+  it('trae película y cine en una sola consulta y devuelve la fila', async () => {
+    const row = { id: 5 };
+    const { qb, repo, dataSource, dao } = setup([row]);
+
+    await expect(dao.findSelectableById(5)).resolves.toBe(row);
+
+    expect(dataSource.getRepository).toHaveBeenCalledWith(Showtime);
+    expect(repo.createQueryBuilder).toHaveBeenCalledWith('showtime');
+    expect(qb.innerJoinAndSelect).toHaveBeenCalledWith('showtime.movie', 'movie');
+    expect(qb.innerJoinAndSelect).toHaveBeenCalledWith('showtime.cinema', 'cinema');
+    expect(qb.getOne).toHaveBeenCalledTimes(1);
+  });
+
+  it('aplica los cinco filtros: id, película activa, no cancelada, cine activo y futura', async () => {
+    const { qb, dao } = setup();
+    const before = Date.now();
+
+    await dao.findSelectableById(5);
+
+    expect(qb.where).toHaveBeenCalledWith('showtime.id = :id', { id: 5 });
+    expect(qb.andWhere).toHaveBeenCalledWith('movie.status = :movieStatus', {
+      movieStatus: MovieStatus.ACTIVE,
+    });
+    expect(qb.andWhere).toHaveBeenCalledWith('showtime.status <> :cancelled', {
+      cancelled: ShowtimeStatus.CANCELLED,
+    });
+    expect(qb.andWhere).toHaveBeenCalledWith('cinema.isActive = true');
+    const call = qb.andWhere.mock.calls.find(
+      ([clause]: [string]) => clause === 'showtime.startsAt > :now',
+    );
+    expect(call![1].now.getTime()).toBeGreaterThanOrEqual(before);
+    expect(qb.andWhere).toHaveBeenCalledTimes(4);
+  });
+
+  it('no excluye SOLD_OUT', async () => {
+    const { qb, dao } = setup();
+
+    await dao.findSelectableById(5);
+
+    expect(qb.andWhere).not.toHaveBeenCalledWith('showtime.status <> :soldOut', expect.anything());
+  });
+
+  it('devuelve null si no hay fila', async () => {
+    const { dao } = setup();
+
+    await expect(dao.findSelectableById(404)).resolves.toBeNull();
   });
 });
