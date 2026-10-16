@@ -1,7 +1,7 @@
 // Primero: database.ts lee process.env al importarse.
 import '../config/load-env.js';
 import 'reflect-metadata';
-import { DataSource, type ObjectLiteral, type Repository } from 'typeorm';
+import { DataSource, type DeepPartial, type ObjectLiteral, type Repository } from 'typeorm';
 import { typeOrmOptions } from '../database.js';
 import { Country } from '../modules/country/country.entity.js';
 import { Department } from '../modules/country/department/department.entity.js';
@@ -26,15 +26,32 @@ async function findOrCreate<T extends ObjectLiteral>(
   label: string,
   where: object,
   data: object,
+  refresh = false,
 ): Promise<T> {
   const found = await repo.findOne({ where });
   if (found) {
+    if (refresh) {
+      // Para que una BD ya sembrada reciba las columnas nuevas (HU-004).
+      console.log(`Actualizado: ${label}`);
+      return repo.save(repo.merge(found, data as DeepPartial<T>));
+    }
     console.log(`Ya existe: ${label}`);
     return found;
   }
   const created = await repo.save(repo.create(data as T));
   console.log(`Creado: ${label}`);
   return created;
+}
+
+/** Precio base por formato (COP). */
+function priceFor(format: ShowFormat): number {
+  const prices = {
+    [ShowFormat.DOS_D]: 14000,
+    [ShowFormat.TRES_D]: 18000,
+    [ShowFormat.IMAX]: 24000,
+    [ShowFormat.VIP]: 32000,
+  };
+  return prices[format];
 }
 
 /** Medianoche de hoy (zona `TZ`) + `days` días, a la hora `hour`. */
@@ -106,10 +123,16 @@ async function seed(): Promise<void> {
     }
     const [centro, cerrado, sur] = cinemaRows;
 
-    // Películas: 4 activas, 1 próxima y 1 inactiva (solo las activas salen en la cartelera).
+    // Películas: 5 activas, 2 próximas y 1 inactiva (solo las activas salen en la cartelera).
+    // «Sombras del Pasado» y «Corazón de Barrio» no tienen funciones.
     const movieData = [
       {
         name: 'Noche en Medellín',
+        synopsis: 'Una noche cambia para siempre la vida de tres amigos en las calles de Medellín.',
+        cast: ['Valentina Cruz', 'Andrés Londoño', 'Camila Henao'],
+        posterUrl: 'https://picsum.photos/seed/noche-en-medellin-poster/400/600',
+        bannerUrl: 'https://picsum.photos/seed/noche-en-medellin-banner/1280/480',
+        trailerUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
         genre: 'Drama',
         classification: AgeRating.DIECISEIS,
         duration: 118,
@@ -119,6 +142,11 @@ async function seed(): Promise<void> {
       },
       {
         name: 'Aventura Galáctica',
+        synopsis: 'Una tripulación cruza la galaxia para salvar su planeta de una amenaza antigua.',
+        cast: ['Daniel Ortiz', 'Laura Vélez', 'Mateo Serna'],
+        posterUrl: 'https://picsum.photos/seed/aventura-galactica-poster/400/600',
+        bannerUrl: 'https://picsum.photos/seed/aventura-galactica-banner/1280/480',
+        trailerUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
         genre: 'Ciencia ficción',
         classification: AgeRating.DOCE,
         duration: 135,
@@ -128,6 +156,11 @@ async function seed(): Promise<void> {
       },
       {
         name: 'Risas en Familia',
+        synopsis: 'Una familia numerosa convierte unas vacaciones en una cadena de enredos.',
+        cast: ['Carolina Mora', 'Julián Pineda', 'Sara Botero'],
+        posterUrl: 'https://picsum.photos/seed/risas-en-familia-poster/400/600',
+        bannerUrl: 'https://picsum.photos/seed/risas-en-familia-banner/1280/480',
+        trailerUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
         genre: 'Comedia',
         classification: AgeRating.TODOS,
         duration: 95,
@@ -137,6 +170,11 @@ async function seed(): Promise<void> {
       },
       {
         name: 'El Último Testigo',
+        synopsis: 'Un testigo clave debe sobrevivir 48 horas antes de declarar.',
+        cast: ['Felipe Ramírez', 'Isabel Zapata', 'Nicolás Cano'],
+        posterUrl: 'https://picsum.photos/seed/el-ultimo-testigo-poster/400/600',
+        bannerUrl: 'https://picsum.photos/seed/el-ultimo-testigo-banner/1280/480',
+        trailerUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
         genre: 'Thriller',
         classification: AgeRating.DIECIOCHO,
         duration: 110,
@@ -146,6 +184,11 @@ async function seed(): Promise<void> {
       },
       {
         name: 'El Regreso del Rey',
+        synopsis: 'Un reino olvidado espera el regreso de su legítimo heredero.',
+        cast: ['Tomás Giraldo', 'Elena Uribe', 'Simón Arango'],
+        posterUrl: 'https://picsum.photos/seed/el-regreso-del-rey-poster/400/600',
+        bannerUrl: 'https://picsum.photos/seed/el-regreso-del-rey-banner/1280/480',
+        trailerUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
         genre: 'Fantasía',
         classification: AgeRating.DOCE,
         duration: 140,
@@ -155,6 +198,11 @@ async function seed(): Promise<void> {
       },
       {
         name: 'Clásico Retirado',
+        synopsis: 'Un romance de época que dejó la cartelera hace tiempo.',
+        cast: ['Marina Salazar', 'Esteban Rojas'],
+        posterUrl: 'https://picsum.photos/seed/clasico-retirado-poster/400/600',
+        bannerUrl: 'https://picsum.photos/seed/clasico-retirado-banner/1280/480',
+        trailerUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
         genre: 'Romance',
         classification: AgeRating.TODOS,
         duration: 100,
@@ -162,17 +210,45 @@ async function seed(): Promise<void> {
         status: MovieStatus.INACTIVE,
         audienceRating: '3.5',
       },
+      {
+        name: 'Sombras del Pasado',
+        synopsis: 'Una periodista investiga un caso archivado que involucra a su propia familia.',
+        cast: ['Natalia Correa', 'Héctor Medina'],
+        posterUrl: 'https://picsum.photos/seed/sombras-del-pasado-poster/400/600',
+        bannerUrl: 'https://picsum.photos/seed/sombras-del-pasado-banner/1280/480',
+        trailerUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+        genre: 'Drama',
+        classification: AgeRating.DIECISEIS,
+        duration: 112,
+        director: 'Camilo Vargas',
+        status: MovieStatus.ACTIVE,
+        audienceRating: '4.5',
+      },
+      {
+        name: 'Corazón de Barrio',
+        synopsis: 'La historia de un barrio que se une para salvar su cancha de fútbol.',
+        cast: ['Luz Marina Duarte', 'Brayan Tobón'],
+        posterUrl: 'https://picsum.photos/seed/corazon-de-barrio-poster/400/600',
+        bannerUrl: 'https://picsum.photos/seed/corazon-de-barrio-banner/1280/480',
+        trailerUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+        genre: 'Drama',
+        classification: AgeRating.DOCE,
+        duration: 105,
+        director: 'Paula Echeverri',
+        status: MovieStatus.UPCOMING,
+        audienceRating: '4.8',
+      },
     ];
     const movieRows: Movie[] = [];
     for (const data of movieData) {
-      const releaseDate =
-        data.status === MovieStatus.UPCOMING ? dayAt(30, 0) : dayAt(-60, 0);
+      const releaseDate = data.status === MovieStatus.UPCOMING ? dayAt(30, 0) : dayAt(-60, 0);
       movieRows.push(
         await findOrCreate(
           movies,
           `película ${data.name} (${data.status})`,
           { name: data.name },
-          { ...data, posterUrl: null, releaseDate },
+          { ...data, releaseDate },
+          true,
         ),
       );
     }
@@ -316,6 +392,7 @@ async function seed(): Promise<void> {
         audioType: AudioType.DUBBED,
         status: ShowtimeStatus.ACTIVE,
         roomType: 'STANDARD',
+        price: 17000, // Excepción: más barata en Sur.
       },
     ];
     for (const data of showtimeData) {
@@ -327,7 +404,13 @@ async function seed(): Promise<void> {
           cinema: { id: data.cinema.id },
           startsAt: data.startsAt,
         },
-        { ...data, language: data.language ?? 'Español', roomType: data.roomType ?? 'STANDARD' },
+        {
+          ...data,
+          language: data.language ?? 'Español',
+          roomType: data.roomType ?? 'STANDARD',
+          price: data.price ?? priceFor(data.format),
+        },
+        true,
       );
     }
   } finally {

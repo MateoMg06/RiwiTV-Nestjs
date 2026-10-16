@@ -11,7 +11,7 @@
 | HU-001 | Parcial | Capas, `.env` obligatorio, Docker Compose, Swagger, logger, Vitest, oxlint, Prettier, Helmet, CORS, `GET /api/v1/health` | Migraciones automáticas al arrancar (hoy `synchronize: true`), ambientes Dev/QA/Prod |
 | HU-002 | Completa salvo prueba manual | Entidades; `GET /countries`, `/departments/:countryId`, `/cities/:departmentId` (públicas, ciudades solo activas); `POST /users/location` (JWT) con RN-006; entidad `Cinema` mínima; `npm run seed` | Prueba manual contra Postgres (seed + `POST /api/users/location`) |
 | HU-003 | Completa salvo prueba manual | Entidades `Movie` y `Showtime` (con `roomType`); `GET /movies`, `/movies/weekly`, `/movies/filter` y `/movies/today` (públicos; filtros `cityId`, `cinemaId`, `genre`, `classification`, `language`, `roomType`, `format`, `date`, `available`; 7 días, RN-011/012); seed con películas y funciones | Prueba manual contra Postgres |
-| HU-004 | No iniciada | — | Detalle completo (incluye precio por formato y calificación promedio), funciones futuras de la ciudad, recomendaciones |
+| HU-004 | Completa salvo prueba manual | Columnas nuevas en `Movie` (`synopsis`, `cast`, `bannerUrl`, `trailerUrl`) y `Showtime.price`; `GET /movies/:id` (detalle con `formats`, `languages`, `prices` y `showtimes` futuras), `GET /movies/:id/functions`, `GET /movies/:id/recommendations` (públicos, `?cityId=` opcional en detalle y funciones); `MovieDao`; seed ampliado con `refresh` | Prueba manual contra Postgres |
 | HU-005 | No iniciada | — | Próximos estrenos ordenados por fecha, contador regresivo, `ReleaseNotification` sin duplicados (RN-019), correo al pasar a "En Cartelera" (RN-020) |
 | HU-006 | Parcial | Captcha, registro, BCrypt, validador de contraseña (≥10 + complejidad), activación por token 24 h | Crear perfil, membresía **Activa** con código único, historial vacío, billetera vacía y preferencias; correo de activación (SMTP); `POST /auth/verify-email`; `POST /membership/create`; DTO con mínimo 10 |
 | HU-007 | Parcial | JWT 15 min, refresh 7 d en BD con rotación, logout, bloqueo 15 min tras intentos, solo cuentas activas, cookies | Invalidar el refresh anterior en cada login (RN-030); respuesta de login con membresía, beneficios y perfil; forgot/reset password; auditoría de accesos con IP y dispositivo |
@@ -60,6 +60,13 @@
 - HU-003: `date` (YYYY-MM-DD) puede estar fuera de la ventana de 7 días; muestra ese día completo, pero sin funciones ya iniciadas (`from` = max(inicio del día, ahora)); día pasado → `[]`; fecha inexistente (`2026-02-30`) → 400. Decisión de la persona.
 - HU-003: `roomType` es string libre (`varchar(30)`, default `'STANDARD'`), sin enum ni tabla. Filtros por igualdad exacta (sensible a mayúsculas). `classification=12+` se envía como `12%2B`. Decisión de la persona.
 - HU-003: seed con 3 funciones más (16 en total): Centro hoy 23:30 en inglés, Centro +1 22:00 IMAX `SOLD_OUT` en sala `VIP`, Sur +3 17:00 3D.
+- HU-004: el detalle solo existe para películas `ACTIVE`; `UPCOMING`/`INACTIVE` dan 404 «Película no encontrada». Desviación del original (el detalle de próximos estrenos es HU-005, `/movies/upcoming/:id`, que debe declararse **antes** de `:id` en el controller).
+- HU-004: funciones del detalle y de `/:id/functions`: solo futuras (`startsAt > ahora`, RN-014), `SOLD_OUT` incluidas con su status (RN-015), `CANCELLED` excluidas, cines activos, sin tope superior de fecha. `?cityId=` opcional (≥ 1; sin él, todas las ciudades).
+- HU-004: `Showtime.price` es `decimal(12,2)` default 0 (llega como string; el service lo pasa a `Number`). La respuesta incluye `prices: [{ format, price }]` con el precio mínimo por formato entre las funciones devueltas, y cada función trae su `price`. El mapper de función compartido incluye `price` también en la cartelera de HU-003.
+- HU-004: `genre` es un string único; la calificación es `audienceRating`. `trailerUrl` se devuelve tal cual (el embebido de YouTube es del frontend). `cast` es `jsonb` (`string[]`).
+- HU-004: recomendaciones = mismo género, `id <> movie.id`, solo `ACTIVE`, orden `audienceRating DESC, name ASC`, máximo 6. Desviación del original, que incluía `UPCOMING`.
+- HU-004: `MovieDao` (solo `Movie`) con `findActiveById` y `findRecommendations`; `MovieCityQueryDto` solo acepta `cityId` (no reutiliza `CatalogQueryDto`, para no admitir filtros que aquí no aplican).
+- HU-004: el seed usa `findOrCreate(..., refresh)`: con `refresh` hace `merge`+`save` si ya existe; solo en películas y funciones, para que una BD ya sembrada reciba las columnas nuevas. Precios: `priceFor(format)` (2D 14000, 3D 18000, IMAX 24000, VIP 32000) y «Noche en Medellín» 3D en Sur = 17000. Películas nuevas: «Sombras del Pasado» (Drama, ACTIVE, 4.5, sin funciones) y «Corazón de Barrio» (Drama, UPCOMING, 4.8).
 
 ## Pendientes
 
@@ -78,7 +85,8 @@ Por historia:
 - [x] HU-003 paso 2: `GET /movies/today`.
 - [x] HU-003 pasos 3–5: filtros y "Disponible"; columna `roomType` en `Showtime`.
 - [ ] HU-003: prueba manual contra Postgres (seed + `GET /api/movies/weekly?cityId=`); añadir `TZ=America/Bogota` al `.env` local (ya está en `.env.example`). Consultas de los filtros (la columna `roomType` la crea `synchronize`; en BD con funciones previas toma `STANDARD`): `?format=IMAX`, `?format=IMAX&available=true`, `?roomType=VIP`, `?language=Inglés`, `?cinemaId=<Sur>`, `?genre=Drama`, `?classification=16%2B`, `?date=<hoy+3>`, `?date=<ayer>` (→ `[]`), `?date=2026-13-01` (→ 400), `/today?available=true`.
-- [ ] HU-004: detalle completo con precio por formato; funciones futuras de la ciudad; recomendaciones.
+- [x] HU-004: detalle, funciones futuras y recomendaciones.
+- [ ] HU-004: prueba manual contra Postgres (`npm run build && npm run seed`; las columnas nuevas las crea `synchronize`; sin seed las películas previas tienen sinopsis `''`, `cast` `[]` y precio 0). Consultas: `GET /api/movies/<id>` (Noche en Medellín: `prices` 2D 14000 / 3D 17000 si no se filtra ciudad; con `?cityId=<Itagüí>` solo 3D 17000), `/<id>/functions?cityId=`, `/<id>/recommendations` (Noche → Sombras del Pasado primero, 4.5), id de película próxima o inactiva (→ 404), `/abc` (→ 400), `?cityId=0` (→ 400).
 - [ ] HU-005: próximos estrenos; `POST /notifications/upcoming` sin duplicados; correo al pasar a "En Cartelera".
 - [ ] HU-006: `register` crea `Profile`, `Membership` **Activa** con código único, historial vacío, billetera vacía y preferencias; correo de activación (nodemailer); `POST /auth/verify-email`; `POST /membership/create`; `CreateUserDto` con mínimo 10 caracteres.
 - [ ] HU-007: invalidar el refresh anterior en cada login (RN-030); login devuelve membresía, beneficios y perfil; `POST /auth/forgot-password` y `/reset-password` + `PasswordResetToken`; `AccessAudit` (IP y dispositivo) en login, login fallido, refresh, logout, reset y activación.
@@ -121,6 +129,14 @@ No se implementa (no pertenece a HU-001 a HU-010):
 18. [ ] HU-007: la respuesta de login no incluye membresía, beneficios ni datos del perfil — `src/modules/auth/auth.service.ts`.
 
 ## Registro de cambios
+
+### 2026-10-15 — feat(HU-004): detalle de película, funciones futuras y recomendaciones
+- **Archivos:** `src/modules/movie/{movie.entity,movie.service,movie.controller,movie.module}.ts` y specs de service y controller, `src/modules/movie/{movie.dao,movie-city-query.dto}.ts` y sus specs (nuevos), `src/modules/showtime/{showtime.entity,showtime.dao}.ts` y `showtime.dao.spec.ts`, `src/seeders/seed.ts`, `agent.md` (§5.1 fila HU-003/004/005), `memory.md`.
+- **Qué:** endpoints públicos `GET /api/movies/:id`, `/:id/functions` y `/:id/recommendations` (`:id` con `ParseIntPipe`; `?cityId=` opcional en detalle y funciones), declarados tras `weekly` y `today`. Detalle: datos base + `synopsis`, `cast`, `bannerUrl`, `trailerUrl`, `formats`, `languages`, `prices` (mínimo por formato) y `showtimes` futuras. `Movie` gana `synopsis`, `cast`, `bannerUrl`, `trailerUrl`; `Showtime` gana `price`. El service extrae `toShowtime`/`toMovieBase` (también usados por la cartelera: cada función de HU-003 ahora trae `price`). Seed con `refresh`, textos, imágenes, tráiler, precios y dos películas nuevas.
+- **Por qué:** HU-004 (detalle completo, funciones futuras RN-014/RN-015, recomendaciones).
+- **Impacto:** rutas nuevas sin token; columnas nuevas en `Movies` y `Showtimes` (`synchronize` las crea; sin migración); campo `price` nuevo en las funciones de la cartelera; sin variables de entorno nuevas. Nota: `npx prettier` sin `--config .prettierrc.json` usa `.prettierrc` (80 columnas) y reformatea; usar el JSON (100).
+- **Verificación:** `npm run test` ✅ (231/231, 33 nuevos) · `npm run lint` ✅ · `npm run build` ✅. Sin prueba manual (sin Postgres).
+- **Pendiente derivado:** prueba manual de HU-004; HU-005 debe declarar `upcoming/:id` antes de `:id`.
 
 ### 2026-10-15 — chore(HU-003): restaurar `.env.example` con `TZ`
 - **Archivos:** `.env.example`

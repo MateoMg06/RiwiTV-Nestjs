@@ -68,4 +68,20 @@ export class ShowtimeDao {
 
     return query.orderBy('movie.name', 'ASC').addOrderBy('showtime.startsAt', 'ASC').getMany();
   }
+
+  /** Funciones futuras (RN-014) de una película: incluye SOLD_OUT, excluye CANCELLED y cines inactivos. */
+  findFutureByMovie(movieId: number, cityId?: number): Promise<Showtime[]> {
+    const query = this.repo
+      .createQueryBuilder('showtime')
+      .innerJoinAndSelect('showtime.movie', 'movie')
+      .innerJoinAndSelect('showtime.cinema', 'cinema')
+      .where('movie.id = :movieId', { movieId })
+      .andWhere('showtime.startsAt > :now', { now: new Date() })
+      .andWhere('showtime.status <> :cancelled', { cancelled: ShowtimeStatus.CANCELLED })
+      .andWhere('cinema.isActive = true');
+
+    if (cityId !== undefined) query.andWhere('cinema.city = :cityId', { cityId });
+
+    return query.orderBy('showtime.startsAt', 'ASC').getMany();
+  }
 }

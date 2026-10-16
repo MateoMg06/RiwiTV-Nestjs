@@ -3,7 +3,7 @@ import { AudioType, ShowFormat, ShowtimeStatus } from '../../common/enums/domain
 import { Movie } from '../movie/movie.entity.js';
 import { Cinema } from '../cinema/cinema.entity.js';
 
-/** Función. Solo las columnas de la cartelera (HU-003); precio y sala concreta llegan con HU-009. */
+/** Función. Cartelera (HU-003) y precio (HU-004); sala concreta y `availableSeats` llegan con HU-009/010. */
 @Entity('Showtimes')
 export class Showtime {
   @PrimaryGeneratedColumn()
@@ -34,4 +34,8 @@ export class Showtime {
 
   @Column({ type: 'enum', enum: ShowtimeStatus, default: ShowtimeStatus.ACTIVE })
   status: ShowtimeStatus;
+
+  /** Postgres devuelve `decimal` como string; el service lo convierte a número. */
+  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0 })
+  price: string;
 }

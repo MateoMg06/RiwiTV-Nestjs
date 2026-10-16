@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import { PATH_METADATA, METHOD_METADATA } from '@nestjs/common/constants';
-import { RequestMethod } from '@nestjs/common';
+import { PATH_METADATA, METHOD_METADATA, ROUTE_ARGS_METADATA } from '@nestjs/common/constants';
+import { BadRequestException, ParseIntPipe, RequestMethod } from '@nestjs/common';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import { MovieController } from './movie.controller.js';
@@ -59,5 +59,58 @@ describe('CatalogQueryDto (HU-003)', () => {
 
   it.each([['abc'], ['0'], ['-1'], ['1.5']])('rechaza cityId=%s', async (cityId) => {
     expect(await check({ cityId })).toHaveLength(1);
+  });
+});
+
+describe('MovieController detalle (HU-004)', () => {
+  const proto = MovieController.prototype;
+  const routes = [
+    ['getDetail', ':id'],
+    ['getFunctions', ':id/functions'],
+    ['getRecommendations', ':id/recommendations'],
+  ] as const;
+
+  it.each(routes)('%s es GET %s y público', (name, path) => {
+    expect(Reflect.getMetadata(PATH_METADATA, proto[name])).toBe(path);
+    expect(Reflect.getMetadata(METHOD_METADATA, proto[name])).toBe(RequestMethod.GET);
+    expect(Reflect.getMetadata(IS_PUBLIC_KEY, proto[name])).toBe(true);
+  });
+
+  it.each(routes)('%s valida id con ParseIntPipe (400 si no es numérico)', async (name) => {
+    const args = Reflect.getMetadata(ROUTE_ARGS_METADATA, MovieController, name) as Record<
+      string,
+      { data: string; pipes: unknown[] }
+    >;
+    const param = Object.values(args).find((arg) => arg.data === 'id');
+    expect(param?.pipes).toContain(ParseIntPipe);
+    await expect(new ParseIntPipe().transform('abc', { type: 'param' })).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+  });
+
+  it(':id se declara después de weekly y today', () => {
+    const names = Object.getOwnPropertyNames(proto);
+    const index = (name: string) => names.indexOf(name);
+    expect(index('getDetail')).toBeGreaterThan(index('getWeekly'));
+    expect(index('getDetail')).toBeGreaterThan(index('getToday'));
+    expect(index('getDetail')).toBeGreaterThan(index('getFunctions'));
+    expect(index('getDetail')).toBeGreaterThan(index('getRecommendations'));
+  });
+
+  it('delega en el service', async () => {
+    const service = {
+      getDetail: vi.fn().mockResolvedValue({ id: 1 }),
+      getFunctions: vi.fn().mockResolvedValue([]),
+      getRecommendations: vi.fn().mockResolvedValue([]),
+    };
+    const controller = new MovieController(service as unknown as MovieService);
+
+    await controller.getDetail(1, { cityId: 2 });
+    await controller.getFunctions(1, { cityId: 2 });
+    await controller.getRecommendations(1);
+
+    expect(service.getDetail).toHaveBeenCalledWith(1, { cityId: 2 });
+    expect(service.getFunctions).toHaveBeenCalledWith(1, { cityId: 2 });
+    expect(service.getRecommendations).toHaveBeenCalledWith(1);
   });
 });

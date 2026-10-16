@@ -117,9 +117,46 @@ describe('ShowtimeDao.findCatalogRange (HU-003)', () => {
     await dao.findCatalogRange({ from, to, available });
 
     expect(qb.andWhere).toHaveBeenCalledTimes(3);
-    expect(qb.andWhere).not.toHaveBeenCalledWith(
-      'showtime.status <> :soldOut',
-      expect.anything(),
+    expect(qb.andWhere).not.toHaveBeenCalledWith('showtime.status <> :soldOut', expect.anything());
+  });
+});
+
+describe('ShowtimeDao.findFutureByMovie (HU-004)', () => {
+  it('filtra película, futuras, no canceladas y cines activos; ordena por inicio', async () => {
+    const rows = [{ id: 1 }];
+    const { qb, repo, dao } = setup(rows);
+    const before = Date.now();
+
+    await expect(dao.findFutureByMovie(9)).resolves.toBe(rows);
+
+    expect(repo.createQueryBuilder).toHaveBeenCalledWith('showtime');
+    expect(qb.innerJoinAndSelect).toHaveBeenCalledWith('showtime.cinema', 'cinema');
+    expect(qb.where).toHaveBeenCalledWith('movie.id = :movieId', { movieId: 9 });
+    const call = qb.andWhere.mock.calls.find(
+      ([clause]: [string]) => clause === 'showtime.startsAt > :now',
     );
+    expect(call![1].now.getTime()).toBeGreaterThanOrEqual(before);
+    expect(qb.andWhere).toHaveBeenCalledWith('showtime.status <> :cancelled', {
+      cancelled: ShowtimeStatus.CANCELLED,
+    });
+    expect(qb.andWhere).toHaveBeenCalledWith('cinema.isActive = true');
+    expect(qb.orderBy).toHaveBeenCalledWith('showtime.startsAt', 'ASC');
+    expect(qb.andWhere).toHaveBeenCalledTimes(3);
+  });
+
+  it('no excluye SOLD_OUT', async () => {
+    const { qb, dao } = setup();
+
+    await dao.findFutureByMovie(9);
+
+    expect(qb.andWhere).not.toHaveBeenCalledWith('showtime.status <> :soldOut', expect.anything());
+  });
+
+  it('filtra por ciudad cuando viene cityId', async () => {
+    const { qb, dao } = setup();
+
+    await dao.findFutureByMovie(9, 4);
+
+    expect(qb.andWhere).toHaveBeenCalledWith('cinema.city = :cityId', { cityId: 4 });
   });
 });

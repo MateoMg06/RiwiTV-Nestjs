@@ -1,7 +1,7 @@
 import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
 import { AgeRating, MovieStatus } from '../../common/enums/domain.enums.js';
 
-/** Película. Solo las columnas de la cartelera (HU-003); el detalle (HU-004) añade el resto. */
+/** Película: columnas de la cartelera (HU-003) y del detalle (HU-004). */
 @Entity('Movies')
 export class Movie {
   @PrimaryGeneratedColumn()
@@ -35,4 +35,18 @@ export class Movie {
   /** Postgres devuelve `decimal` como string; el service lo convierte a número. */
   @Column({ type: 'decimal', precision: 3, scale: 1, default: 0 })
   audienceRating: string;
+
+  @Column({ type: 'text', default: '' })
+  synopsis: string;
+
+  /** Actores. */
+  @Column({ type: 'jsonb', default: () => `'[]'` })
+  cast: string[];
+
+  @Column({ type: 'varchar', nullable: true })
+  bannerUrl: string | null;
+
+  /** Se devuelve tal cual; el embebido de YouTube es del frontend. */
+  @Column({ type: 'varchar', nullable: true })
+  trailerUrl: string | null;
 }

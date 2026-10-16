@@ -254,7 +254,7 @@ El original montaba cada ruta con prefijo `/api`, `/api/v1` y sin prefijo. **Nes
 | HU-001 | `GET /api/v1/health` | **No existe** |
 | HU-002 | `GET /countries`, `/departments/:countryId`, `/cities/:departmentId` | `GET /api/countries`, `/api/departments/:countryId`, `/api/cities/:departmentId` (implementadas) |
 | HU-002 | `POST`/`PUT /users/location` | `POST /api/users/location` (JWT) implementado; `PUT` no (fuera de alcance) |
-| HU-003/004/005 | `/api/movies/...` | **Parcial:** HU-003 completa: `GET /api/movies`, `/weekly`, `/filter` y `/today` con filtros (`cityId`, `cinemaId`, `genre`, `classification`, `language`, `roomType`, `format`, `date`, `available`); HU-004/005 no (base en `origin/feature/movie-module`) |
+| HU-003/004/005 | `/api/movies/...` | **Parcial:** HU-003 completa: `GET /api/movies`, `/weekly`, `/filter` y `/today` con filtros (`cityId`, `cinemaId`, `genre`, `classification`, `language`, `roomType`, `format`, `date`, `available`); HU-004 completa: `GET /api/movies/:id`, `/:id/functions`, `/:id/recommendations` (`?cityId=` opcional); HU-005 no (base en `origin/feature/movie-module`) |
 | HU-005 | `POST /api/notifications/upcoming` | **No existe** |
 | HU-006 | `GET /api/auth/captcha`, `POST /api/auth/register` | ✅ |
 | HU-006 | `POST /api/auth/verify-email` (+ `GET`, y alias `/activate`) | Solo `POST /api/auth/activate` |

@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { MovieService } from './movie.service.js';
 import type { ShowtimeDao } from '../showtime/showtime.dao.js';
+import type { MovieDao } from './movie.dao.js';
 import type { Showtime } from '../showtime/showtime.entity.js';
 import {
   AgeRating,
@@ -41,6 +42,7 @@ const showtime = (
     roomType: 'STANDARD',
     audioType: AudioType.DUBBED,
     status: ShowtimeStatus.ACTIVE,
+    price: '14000.00',
   }) as unknown as Showtime;
 
 describe('MovieService.getWeekly (HU-003)', () => {
@@ -51,7 +53,7 @@ describe('MovieService.getWeekly (HU-003)', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date(2026, 9, 15, 14, 30, 0)); // 15-oct-2026 14:30 hora local
     dao = { findCatalogRange: vi.fn().mockResolvedValue([]) };
-    service = new MovieService(dao as unknown as ShowtimeDao);
+    service = new MovieService(dao as unknown as ShowtimeDao, {} as unknown as MovieDao);
   });
 
   afterEach(() => vi.useRealTimers());
@@ -104,6 +106,7 @@ describe('MovieService.getWeekly (HU-003)', () => {
       roomType: 'STANDARD',
       audioType: AudioType.DUBBED,
       status: ShowtimeStatus.ACTIVE,
+      price: 14000,
       cinema: { id: 11, name: 'Sur' },
     });
     expect(result[1].showtimes).toHaveLength(1);
@@ -138,7 +141,7 @@ describe('MovieService.getToday (HU-003)', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date(2026, 9, 15, 14, 30, 0));
     dao = { findCatalogRange: vi.fn().mockResolvedValue([]) };
-    service = new MovieService(dao as unknown as ShowtimeDao);
+    service = new MovieService(dao as unknown as ShowtimeDao, {} as unknown as MovieDao);
   });
 
   afterEach(() => vi.useRealTimers());
@@ -186,7 +189,7 @@ describe('MovieService filtros (HU-003 pasos 3-5)', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date(2026, 9, 15, 14, 30, 0));
     dao = { findCatalogRange: vi.fn().mockResolvedValue([]) };
-    service = new MovieService(dao as unknown as ShowtimeDao);
+    service = new MovieService(dao as unknown as ShowtimeDao, {} as unknown as MovieDao);
   });
 
   afterEach(() => vi.useRealTimers());
@@ -267,5 +270,231 @@ describe('MovieService filtros (HU-003 pasos 3-5)', () => {
 
     expect(movie.showtimes[0].roomType).toBe('VIP');
     expect(movie.formats).toEqual([ShowFormat.VIP]);
+  });
+});
+
+const detailMovie = {
+  ...movieA,
+  synopsis: 'Sinopsis',
+  cast: ['Actor Uno', 'Actor Dos'],
+  bannerUrl: 'https://img/banner.jpg',
+  trailerUrl: 'https://www.youtube.com/watch?v=abc',
+};
+
+const futureShowtime = (
+  id: number,
+  format: ShowFormat,
+  price: string,
+  extra: Partial<{ language: string; status: ShowtimeStatus }> = {},
+) =>
+  ({
+    ...showtime(id, movieA, format),
+    price,
+    ...extra,
+  }) as unknown as Showtime;
+
+function setupDetail() {
+  const showtimeDao = { findFutureByMovie: vi.fn().mockResolvedValue([]) };
+  const movieDao = {
+    findActiveById: vi.fn().mockResolvedValue(detailMovie),
+    findRecommendations: vi.fn().mockResolvedValue([]),
+  };
+  const service = new MovieService(
+    showtimeDao as unknown as ShowtimeDao,
+    movieDao as unknown as MovieDao,
+  );
+  return { showtimeDao, movieDao, service };
+}
+
+describe('MovieService.getDetail (HU-004)', () => {
+  it('404 si la película no existe o no está ACTIVE', async () => {
+    const { movieDao, showtimeDao, service } = setupDetail();
+    movieDao.findActiveById.mockResolvedValue(null);
+
+    await expect(service.getDetail(99)).rejects.toThrow(
+      new NotFoundException('Película no encontrada'),
+    );
+    expect(movieDao.findActiveById).toHaveBeenCalledWith(99);
+    expect(showtimeDao.findFutureByMovie).not.toHaveBeenCalled();
+  });
+
+  it('mapea el detalle completo con números', async () => {
+    const { showtimeDao, service } = setupDetail();
+    showtimeDao.findFutureByMovie.mockResolvedValue([
+      futureShowtime(1, ShowFormat.IMAX, '24000.00'),
+    ]);
+
+    const detail = await service.getDetail(1);
+
+    expect(detail).toMatchObject({
+      id: 1,
+      name: 'Alfa',
+      genre: 'Acción',
+      classification: AgeRating.DOCE,
+      duration: 120,
+      director: 'Dir A',
+      posterUrl: null,
+      status: MovieStatus.ACTIVE,
+      audienceRating: 4.5,
+      synopsis: 'Sinopsis',
+      cast: ['Actor Uno', 'Actor Dos'],
+      bannerUrl: 'https://img/banner.jpg',
+      trailerUrl: 'https://www.youtube.com/watch?v=abc',
+      formats: [ShowFormat.IMAX],
+      languages: ['Español'],
+      prices: [{ format: ShowFormat.IMAX, price: 24000 }],
+    });
+    expect(detail.showtimes).toEqual([
+      {
+        id: 1,
+        startsAt: new Date('2026-10-11T20:00:00Z'),
+        format: ShowFormat.IMAX,
+        language: 'Español',
+        roomType: 'STANDARD',
+        audioType: AudioType.DUBBED,
+        status: ShowtimeStatus.ACTIVE,
+        price: 24000,
+        cinema: { id: 10, name: 'Centro' },
+      },
+    ]);
+  });
+
+  it('formats y languages sin repetidos', async () => {
+    const { showtimeDao, service } = setupDetail();
+    showtimeDao.findFutureByMovie.mockResolvedValue([
+      futureShowtime(1, ShowFormat.DOS_D, '14000.00'),
+      futureShowtime(2, ShowFormat.DOS_D, '14000.00', { language: 'Inglés' }),
+      futureShowtime(3, ShowFormat.VIP, '32000.00'),
+    ]);
+
+    const detail = await service.getDetail(1);
+
+    expect(detail.formats).toEqual([ShowFormat.DOS_D, ShowFormat.VIP]);
+    expect(detail.languages).toEqual(['Español', 'Inglés']);
+  });
+
+  it('prices: precio mínimo por formato', async () => {
+    const { showtimeDao, service } = setupDetail();
+    showtimeDao.findFutureByMovie.mockResolvedValue([
+      futureShowtime(1, ShowFormat.TRES_D, '18000.00'),
+      futureShowtime(2, ShowFormat.TRES_D, '17000.00'),
+      futureShowtime(3, ShowFormat.DOS_D, '14000.00'),
+      futureShowtime(4, ShowFormat.TRES_D, '19000.00'),
+    ]);
+
+    const detail = await service.getDetail(1);
+
+    expect(detail.prices).toEqual([
+      { format: ShowFormat.TRES_D, price: 17000 },
+      { format: ShowFormat.DOS_D, price: 14000 },
+    ]);
+  });
+
+  it('incluye funciones SOLD_OUT con su status', async () => {
+    const { showtimeDao, service } = setupDetail();
+    showtimeDao.findFutureByMovie.mockResolvedValue([
+      futureShowtime(1, ShowFormat.IMAX, '24000.00', {
+        status: ShowtimeStatus.SOLD_OUT,
+      }),
+    ]);
+
+    const detail = await service.getDetail(1);
+
+    expect(detail.showtimes[0].status).toBe(ShowtimeStatus.SOLD_OUT);
+  });
+
+  it('pasa cityId al DAO de funciones', async () => {
+    const { showtimeDao, service } = setupDetail();
+
+    await service.getDetail(1, { cityId: 5 });
+
+    expect(showtimeDao.findFutureByMovie).toHaveBeenCalledWith(1, 5);
+  });
+
+  it('sin cityId consulta todas las ciudades', async () => {
+    const { showtimeDao, service } = setupDetail();
+
+    await service.getDetail(1);
+
+    expect(showtimeDao.findFutureByMovie).toHaveBeenCalledWith(1, undefined);
+  });
+
+  it('sin funciones: showtimes, formats, languages y prices vacíos', async () => {
+    const { service } = setupDetail();
+
+    const detail = await service.getDetail(1);
+
+    expect(detail.showtimes).toEqual([]);
+    expect(detail.formats).toEqual([]);
+    expect(detail.languages).toEqual([]);
+    expect(detail.prices).toEqual([]);
+  });
+});
+
+describe('MovieService.getFunctions (HU-004)', () => {
+  it('404 si la película no existe o no está ACTIVE', async () => {
+    const { movieDao, showtimeDao, service } = setupDetail();
+    movieDao.findActiveById.mockResolvedValue(null);
+
+    await expect(service.getFunctions(99)).rejects.toBeInstanceOf(NotFoundException);
+    expect(showtimeDao.findFutureByMovie).not.toHaveBeenCalled();
+  });
+
+  it('devuelve solo el array de funciones mapeadas', async () => {
+    const { showtimeDao, service } = setupDetail();
+    showtimeDao.findFutureByMovie.mockResolvedValue([
+      futureShowtime(1, ShowFormat.VIP, '32000.00'),
+    ]);
+
+    const result = await service.getFunctions(1);
+
+    expect(Array.isArray(result)).toBe(true);
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({
+      id: 1,
+      format: ShowFormat.VIP,
+      price: 32000,
+    });
+  });
+
+  it('pasa cityId al DAO', async () => {
+    const { showtimeDao, service } = setupDetail();
+
+    await service.getFunctions(1, { cityId: 3 });
+
+    expect(showtimeDao.findFutureByMovie).toHaveBeenCalledWith(1, 3);
+  });
+});
+
+describe('MovieService.getRecommendations (HU-004)', () => {
+  it('404 si la película no existe o no está ACTIVE', async () => {
+    const { movieDao, service } = setupDetail();
+    movieDao.findActiveById.mockResolvedValue(null);
+
+    await expect(service.getRecommendations(99)).rejects.toBeInstanceOf(NotFoundException);
+    expect(movieDao.findRecommendations).not.toHaveBeenCalled();
+  });
+
+  it('pide al MovieDao las recomendaciones de la película y las mapea', async () => {
+    const { movieDao, service } = setupDetail();
+    movieDao.findRecommendations.mockResolvedValue([movieB]);
+
+    const result = await service.getRecommendations(1);
+
+    expect(movieDao.findRecommendations).toHaveBeenCalledWith(detailMovie);
+    expect(result).toEqual([
+      {
+        id: 2,
+        name: 'Beta',
+        genre: 'Acción',
+        classification: AgeRating.DOCE,
+        duration: 120,
+        director: 'Dir A',
+        posterUrl: null,
+        releaseDate: movieA.releaseDate,
+        status: MovieStatus.ACTIVE,
+        audienceRating: 0,
+      },
+    ]);
   });
 });
