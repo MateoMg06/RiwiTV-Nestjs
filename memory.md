@@ -144,6 +144,14 @@ No se implementa (no pertenece a HU-001 a HU-010):
 
 ## Registro de cambios
 
+### 2026-10-16 — feat(HU-006): entidad, DAO y service de membresía (paso 2 de 6, sin endpoint)
+- **Archivos:** `src/modules/membership/{membership.entity,membership.dao,membership.service,membership.module}.ts` y specs de dao y service (nuevos), `src/common/enums/domain.enums.ts` (`MembershipStatus`), `src/database.ts`, `memory.md`.
+- **Qué:** tabla `Memberships` (`id`, `userId` único, `code` único, `status`, `createdAt`). `MembershipService.createForUser(userId, manager?)` genera `RTV-` + 10 hex en mayúsculas (`randomBytes(5)`) y reintenta hasta 3 veces si el código colisiona; al agotarlos lanza 500. `MembershipDao.create(data, manager?)` devuelve `null` si Postgres da `23505` sobre `code`, lanza 409 «El usuario ya tiene una membresía» si el `23505` es sobre `userId`, y relanza el resto; `findByUserId`. El INSERT va dentro de `manager.transaction` (savepoint si hay manager) para que un duplicado no aborte la transacción del registro (en Postgres un error invalida toda la transacción). `MembershipModule` exporta `MembershipService`. En `database.ts` la entidad se importa como `MembershipEntity` porque existe el enum `Membership`.
+- **Por qué:** HU-006 (membresía Activa con código único al registrarse).
+- **Impacto:** tabla nueva por `synchronize`; sin endpoints ni variables de entorno todavía. El módulo aún no lo importa nadie (paso 3).
+- **Verificación:** `npm run test` ✅ (285/285, 11 nuevos) · `npm run lint` ✅ · `npm run build` ✅.
+- **Pendiente derivado:** pasos 3 a 6.
+
 ### 2026-10-16 — fix(HU-006): contraseña mínima de 10 en el DTO y campos `gender`/`favoriteCinemaId` (paso 1 de 6)
 - **Archivos:** `src/modules/user/create-user.dto.ts`, `src/modules/user/user.entity.ts`, `src/modules/user/create-user.dto.spec.ts` (nuevo), `memory.md`.
 - **Qué:** `password` pasa de `@Length(8, 72)` a `@Length(10, 72)` (RN-022). `CreateUserDto` gana `gender?` (1–20) y `favoriteCinemaId?` (entero ≥ 1); `User` gana las columnas `gender` y `favoriteCinemaId` (nullable). `UpdateUserDto` deriva de `CreateUserDto`, así que hereda el mínimo 10. Spec nuevo: 9 caracteres falla, 10 pasa, opcionales ausentes, y `birthDate` como cadena JSON `"1995-05-20"` con `plainToInstance` (`enableImplicitConversion`, igual que el `ValidationPipe` de `main.ts`) + `validate`: pasa sin necesidad de `@Type(() => Date)`.

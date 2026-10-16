@@ -27,6 +27,11 @@ export enum ShowFormat {
   VIP = 'VIP',
 }
 
+/** Estado de la membresía digital (HU-006). Nace `ACTIVE` al registrarse. */
+export enum MembershipStatus {
+  ACTIVE = 'ACTIVE',
+}
+
 /** Estado de una funcion. Solo `CANCELLED` se oculta de la cartelera. */
 export enum ShowtimeStatus {
   ACTIVE = 'ACTIVE',
