@@ -202,7 +202,9 @@ export class AuthService {
     const passwordMatches = await this.bcrypt.comparePassword(dto.password, hashToCompare);
 
     if (!user || !passwordMatches) {
-      if (user) {
+      // RN-027: con el bloqueo vigente un fallo no suma ni reinicia `lockedUntil`
+      // (si no, un atacante podria prolongar el bloqueo de la victima).
+      if (user && !this.isLocked(user)) {
         await this.registerFailedAttempt(user);
       }
       // Mensaje unico para ambos casos: no revela si el correo existe.
@@ -394,6 +396,10 @@ export class AuthService {
     }
 
     await this.userDao.update(user.id, patch);
+  }
+
+  private isLocked(user: User): boolean {
+    return !!user.lockedUntil && user.lockedUntil.getTime() > Date.now();
   }
 
   private assertNotLocked(user: User): void {

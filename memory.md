@@ -152,6 +152,14 @@ No se implementa (no pertenece a HU-001 a HU-010):
 
 ## Registro de cambios
 
+### 2026-10-16 — fix(HU-007): un fallo con el bloqueo vigente no lo prolonga; tests RN-027/028/029/031 (paso 4 de 6)
+- **Archivos:** `src/modules/auth/auth.service.ts`, `src/modules/auth/auth.service.spec.ts`, `memory.md`.
+- **Qué:** en `login()`, si `lockedUntil` está en el futuro y la contraseña es incorrecta, no se llama a `registerFailedAttempt` (no suma intentos ni reajusta el bloqueo); sigue el 401 genérico. Con contraseña correcta y bloqueo vigente se mantiene el 403. Tests: RN-027 (5.º fallo bloquea 15 min; fallo durante el bloqueo no actualiza; bloqueo vencido vuelve a contar), RN-028 (`expiresIn` 900 y argumento de `createToken`), RN-029 (`expiresAt` ≈ ahora + 7 d, tolerancia 5 s), RN-031 (inactiva: sin sesión ni tokens).
+- **Por qué:** RN-027: sin esto un atacante podía alargar el bloqueo de la víctima con más intentos.
+- **Impacto:** solo el efecto en BD descrito; contrato HTTP igual.
+- **Verificación:** `npm run test` ✅ (330/330) · `npm run lint` ✅ · `npm run build` ✅.
+- **Pendiente derivado:** pasos 5 y 6.
+
 ### 2026-10-16 — feat(HU-007): el login devuelve membresía, beneficios y perfil (bug #18, paso 3 de 6)
 - **Archivos:** `src/modules/membership/membership.service.ts` (+spec), `src/modules/auth/interfaces/auth-response.interface.ts`, `src/modules/auth/auth.service.ts` (+spec), `src/modules/auth/auth.controller.spec.ts`, `agent.md` (§5.3), `memory.md`.
 - **Qué:** `MembershipService.findByUserId` (delega en el DAO). `LoginResponse extends AuthResponse { membership: { code, status } | null; benefits: [] }`. `login()` lo devuelve tras `issueTokens`; `user` es el `AuthUser` de siempre. `refresh` y `/auth/me` no cambian.

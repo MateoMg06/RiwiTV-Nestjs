@@ -467,6 +467,86 @@ describe('AuthService', () => {
       expect(result.benefits).toEqual([]);
     });
 
+    it('RN-027: con el bloqueo vigente un fallo no suma intentos ni reajusta lockedUntil', async () => {
+      const user = buildUser({
+        failedLoginAttempts: 0,
+        lockedUntil: new Date(Date.now() + 60_000),
+      });
+      (userDao.findByEmailWithPassword as ReturnType<typeof vi.fn>).mockResolvedValue(user);
+
+      await expect(
+        service.login({ email: 'ana@example.com', password: 'mala' }),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
+
+      expect(userDao.update).not.toHaveBeenCalled();
+    });
+
+    it('RN-027: con el bloqueo ya vencido un fallo vuelve a contar', async () => {
+      const user = buildUser({ lockedUntil: new Date(Date.now() - 1_000) });
+      (userDao.findByEmailWithPassword as ReturnType<typeof vi.fn>).mockResolvedValue(user);
+      (userDao.update as ReturnType<typeof vi.fn>).mockResolvedValue(user);
+
+      await service.login({ email: 'ana@example.com', password: 'mala' }).catch(() => {});
+
+      expect(userDao.update).toHaveBeenCalledTimes(1);
+    });
+
+    it('RN-027: el 5.o fallo consecutivo bloquea la cuenta 15 minutos', async () => {
+      const user = buildUser({ failedLoginAttempts: 4 });
+      (userDao.findByEmailWithPassword as ReturnType<typeof vi.fn>).mockResolvedValue(user);
+      (userDao.update as ReturnType<typeof vi.fn>).mockResolvedValue(user);
+      const before = Date.now();
+
+      await service.login({ email: 'ana@example.com', password: 'mala' }).catch(() => {});
+
+      const patch = (userDao.update as ReturnType<typeof vi.fn>).mock.calls[0][1];
+      const lockedMs = (patch.lockedUntil as Date).getTime() - before;
+      expect(Math.abs(lockedMs - 15 * 60_000)).toBeLessThan(5_000);
+    });
+
+    it('RN-028: el access token dura 15 minutos (expiresIn 900)', async () => {
+      vi.stubEnv('JWT_ACCESS_EXPIRES_IN', '15m');
+      vi.spyOn(bcrypt, 'comparePassword').mockResolvedValue(true);
+      const createToken = vi.spyOn(jwt, 'createToken');
+      const user = buildUser();
+      (userDao.findByEmailWithPassword as ReturnType<typeof vi.fn>).mockResolvedValue(user);
+      (userDao.update as ReturnType<typeof vi.fn>).mockResolvedValue(user);
+
+      const result = await service.login({ email: 'ana@example.com', password: 'ok' });
+
+      expect(result.expiresIn).toBe(900);
+      expect(createToken.mock.calls[0][2]).toEqual({ expiresIn: 900 });
+      vi.unstubAllEnvs();
+    });
+
+    it('RN-029: la sesion (refresh) expira en 7 dias', async () => {
+      vi.stubEnv('JWT_REFRESH_EXPIRES_IN', '7d');
+      vi.spyOn(bcrypt, 'comparePassword').mockResolvedValue(true);
+      const user = buildUser();
+      (userDao.findByEmailWithPassword as ReturnType<typeof vi.fn>).mockResolvedValue(user);
+      (userDao.update as ReturnType<typeof vi.fn>).mockResolvedValue(user);
+
+      await service.login({ email: 'ana@example.com', password: 'ok' });
+
+      const session = (authDao.createSession as ReturnType<typeof vi.fn>).mock.calls[0][0];
+      const diff = (session.expiresAt as Date).getTime() - (Date.now() + 7 * 24 * 3_600_000);
+      expect(Math.abs(diff)).toBeLessThan(5_000);
+      vi.unstubAllEnvs();
+    });
+
+    it('RN-031: una cuenta inactiva no crea sesion ni emite tokens', async () => {
+      vi.spyOn(bcrypt, 'comparePassword').mockResolvedValue(true);
+      const createToken = vi.spyOn(jwt, 'createToken');
+      (userDao.findByEmailWithPassword as ReturnType<typeof vi.fn>).mockResolvedValue(
+        buildUser({ accountStatus: AccountStatus.INACTIVE }),
+      );
+
+      await service.login({ email: 'ana@example.com', password: 'ok' }).catch(() => {});
+
+      expect(authDao.createSession).not.toHaveBeenCalled();
+      expect(createToken).not.toHaveBeenCalled();
+    });
+
     it('RN-030: un login fallido o con cuenta inactiva no revoca sesiones', async () => {
       const user = buildUser();
       (userDao.findByEmailWithPassword as ReturnType<typeof vi.fn>).mockResolvedValue(user);
