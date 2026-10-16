@@ -204,6 +204,43 @@ Módulos nuevos esperados: `health` (HU-001), `location` o ampliar `country` (HU
 11. **Formato:** Prettier (`singleQuote`, `trailingComma: all`, `printWidth: 100`, 2 espacios, `;`). Ejecuta `npm run format` sobre lo que toques.
 12. **Config:** lee secretos con `ConfigService.get/getOrThrow(Config.X)`. Si añades una variable: añádela a `Config` (`config.keys.ts`) **y** a `.env.example` (con valor de ejemplo, nunca real) **y** regístrala en `memory.md`. Variables de las historias: `SEAT_LOCK_MINUTES`, `MAX_SEATS_PER_RESERVATION` (valor por defecto; el backlog lo quiere por función), `RESET_TOKEN_EXPIRES_IN`, `SMTP_*`.
 
+### 4.1 Simplicidad: cero sobreingeniería
+
+**El objetivo es cumplir HU-001 a HU-010, no diseñar el sistema ideal.** La medida de "suficiente" son los criterios de aceptación de `docs/historias-de-usuario.md`. Para lo que el backlog no fije, vale el comportamiento del original.
+
+Antes de escribir código, responde a estas preguntas. Si alguna es "no", no lo hagas:
+
+1. **¿Lo exige un criterio o una regla `RN-0XX` de HU-001 a HU-010?** Si no, no se implementa. Si crees que hace falta, anótalo en `memory.md` → Pendientes como propuesta y sigue.
+2. **¿Se usa hoy?** No crees métodos, enums, DTOs, interfaces, decoradores ni utilidades "para después". Se añaden en el commit que los usa por primera vez.
+3. **¿Hay más de un caso real?** Una abstracción (clase base, genérico, factory, interfaz con una sola implementación, helper compartido) solo se justifica con **dos o más usos reales**. Con uno, el código va directo donde se usa.
+4. **¿Lo resuelve Nest o una librería ya instalada?** Úsalo en lugar de construirlo. No añadas dependencias sin anotarlo en `memory.md` con el motivo. (`@nestjs/schedule` para HU-010 sí está justificado.)
+5. **¿Es el cambio más pequeño que cumple el criterio?** Prefiere el diff corto. Nada de refactors "de paso" fuera de la tarea.
+
+**Prohibido sin aprobación explícita de la persona responsable:** CQRS, event sourcing, colas o mensajería, caché distribuida, microservicios, capas extra (repository + DAO + service + facade), Strategy/Factory/Adapter para un único caso, configuración "por si acaso", feature flags, y preparar terreno para HU-011 a HU-029.
+
+**Lo que SÍ es necesario (no es sobreingeniería):** lo que piden las historias aunque parezca complejo (transacción `SERIALIZABLE` y bloqueo de filas en HU-010, auditoría en HU-007 y HU-010), validar la entrada, autenticación y autorización correctas, hash de contraseñas y tokens, y tests del comportamiento. La seguridad no se simplifica.
+
+**Comentarios:** explica el *porqué* de lo que no es obvio en 1–3 líneas. No escribas ensayos sobre decisiones evidentes.
+
+**Código especulativo existente** (ver "Código sin uso" en `memory.md`): no lo amplíes. Elimínalo en un commit propio cuando estés seguro de que nadie lo usa; si una historia lo va a usar, déjalo y anótalo.
+
+### 4.2 Skill `nestjs-best-practices` (`.claude/skills/`)
+
+Úsala como **lista de revisión** (seguridad, errores, validación, N+1), **no como guía de arquitectura**. Si una regla de la skill choca con este archivo, **manda este archivo**. Estas reglas de la skill **no se aplican** en este proyecto:
+
+| Regla de la skill | Por qué no aplica |
+|---|---|
+| `arch-use-repository-pattern`, `di-use-interfaces-tokens`, `di-interface-segregation`, `di-liskov-substitution` | El patrón del repo es Controller → Service → DAO (§3). No se añaden interfaces ni tokens con una sola implementación (§4.1). |
+| `arch-use-events`, `micro-use-patterns`, `micro-use-queues` | Ninguna historia lo pide; está prohibido sin aprobación (§4.1). |
+| `perf-use-caching`, `perf-lazy-loading`, `perf-async-hooks` | Ninguna historia lo pide. |
+| `devops-use-config-module` | El repo usa su propio `ConfigService` + `load-env.ts` (§4, punto 12). No migrar a `@nestjs/config`. |
+| `api-versioning` | La API versionada es HU-029 (fuera de alcance). Solo existe `GET /api/v1/health`. |
+| `security-rate-limiting` | No lo pide ninguna historia; el login ya tiene bloqueo por intentos (HU-007). Proponerlo en Pendientes, no implementarlo. |
+| `security-auth-jwt` (si sugiere `@nestjs/jwt`/Passport) | El repo usa `jsonwebtoken` directo con `Jwt` de `common/utils`. No migrar. |
+| `test-use-testing-module`, `test-e2e-supertest` | Los tests son unitarios con Vitest y dobles `vi.fn()` (§7). E2E solo si una historia lo exige. |
+
+Sí aplican tal cual: `db-use-transactions` (HU-010), `db-use-migrations` (HU-001), `db-avoid-n-plus-one`, `error-*`, `security-validate-all-input`, `security-sanitize-output`, `security-use-guards`, `micro-use-health-checks` (HU-001, sin añadir `@nestjs/terminus` salvo que haga falta).
+
 ---
 
 ## 5. Contrato HTTP
@@ -215,9 +252,9 @@ El original montaba cada ruta con prefijo `/api`, `/api/v1` y sin prefijo. **Nes
 | Historia | Original | NestJS hoy |
 |---|---|---|
 | HU-001 | `GET /api/v1/health` | **No existe** |
-| HU-002 | `GET /countries`, `/departments/:countryId`, `/cities/:departmentId` | `GET /api/pais` (stub) |
-| HU-002 | `POST`/`PUT /users/location` | **No existe** |
-| HU-003/004/005 | `/api/movies/...` | **No existe** (base en `origin/feature/movie-module`) |
+| HU-002 | `GET /countries`, `/departments/:countryId`, `/cities/:departmentId` | `GET /api/countries`, `/api/departments/:countryId`, `/api/cities/:departmentId` (implementadas) |
+| HU-002 | `POST`/`PUT /users/location` | `POST /api/users/location` (JWT) implementado; `PUT` no (fuera de alcance) |
+| HU-003/004/005 | `/api/movies/...` | **Parcial:** existen `GET /api/movies`, `GET /api/movies/weekly` y `GET /api/movies/today` (HU-003 pasos 1–2); el resto no (base en `origin/feature/movie-module`) |
 | HU-005 | `POST /api/notifications/upcoming` | **No existe** |
 | HU-006 | `GET /api/auth/captcha`, `POST /api/auth/register` | ✅ |
 | HU-006 | `POST /api/auth/verify-email` (+ `GET`, y alias `/activate`) | Solo `POST /api/auth/activate` |
@@ -304,6 +341,7 @@ Un problema ⇒ un cambio ⇒ una entrada en `memory.md`. No corrijas todo de go
 - [ ] Leí `memory.md` al empezar.
 - [ ] El cambio pertenece a una historia **HU-001 a HU-010** (y no a "Fuera de alcance").
 - [ ] Revisé las reglas `RN-0XX` y los criterios de aceptación de esa historia en `docs/historias-de-usuario.md`.
+- [ ] Pasa las 5 preguntas de simplicidad (§4.1): nada especulativo, ninguna abstracción con un solo uso, ninguna dependencia nueva sin justificar.
 - [ ] Imports con `.js`, enums centralizados, DTOs validados, sin exponer campos sensibles.
 - [ ] Tests añadidos/actualizados; `test`, `lint` y `build` en verde.
 - [ ] `.env.example` y `Config` actualizados si añadí variables.
